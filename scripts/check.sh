@@ -13,16 +13,19 @@ dart format --output=none --set-exit-if-changed .
 echo "==> Running workspace static analysis..."
 dart analyze
 
+echo "==> Running deterministic hygiene checks..."
+./scripts/check_hygiene.py
+
 run_tests_in() {
   local dir="$1"
   [[ -f "$dir/pubspec.yaml" && -d "$dir/test" ]] || return 0
 
   if grep -qE '^[[:space:]]*sdk:[[:space:]]*flutter([[:space:]]|$)' "$dir/pubspec.yaml"; then
     echo "==> Running flutter test in $dir..."
-    (cd "$dir" && flutter test)
+    (cd "$dir" && flutter test --reporter=failures-only)
   else
     echo "==> Running dart test in $dir..."
-    (cd "$dir" && dart test)
+    (cd "$dir" && dart test --reporter=failures-only)
   fi
 }
 

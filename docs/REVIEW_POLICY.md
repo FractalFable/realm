@@ -4,7 +4,7 @@ Large diffs in Realm are reviewed by [`code-reviewer`](../.agents/agents/code-re
 
 ## Pre-Review Gate (Zero-Token Deterministic Checks)
 
-Callers must run [`./scripts/check.sh`](../scripts/check.sh) (`dart format --output=none --set-exit-if-changed .`, `dart analyze`, and package tests) **before** invoking `code-reviewer` and include the passing summary. `code-reviewer` trusts that fresh run instead of re-running tests; if formatting or static analysis fails, `code-reviewer` returns `REQUEST CHANGES` immediately without spending Tier 3–4 tokens.
+Callers must run [`./scripts/check.sh`](../scripts/check.sh) (`dart format --output=none --set-exit-if-changed .`, `dart analyze`, `./scripts/check_hygiene.py`, and package tests) **before** invoking `code-reviewer` and include the passing summary. `code-reviewer` trusts that fresh run instead of re-running tests; if deterministic checks fail, `code-reviewer` returns `REQUEST CHANGES` immediately without spending Tier 3–4 tokens.
 
 ## Risk Tiers
 
@@ -20,7 +20,7 @@ Callers must run [`./scripts/check.sh`](../scripts/check.sh) (`dart format --out
 ## Promotion & Routing Rules
 
 1. **Content overrides path**: If a file in a lower-risk path (e.g., a UI widget or doc/script) touches payments, fiscalization, authentication, authorization, secrets/BYOK keys, or financial math, promote that file to **Tier 3** or **Tier 4** immediately.
-2. **Small diffs (`<= 15` files or `<= 500` changed lines) or single-tier diffs**: Review in **1 single pass** at the highest active tier's model from [`docs/MODEL_ROUTING.md`](MODEL_ROUTING.md) (no subagent fan-out).
+2. **Small diffs (`<= 15` files and `<= 500` changed lines) or single-tier diffs**: Review in **1 single pass** at the highest active tier's model from [`docs/MODEL_ROUTING.md`](MODEL_ROUTING.md) (no subagent fan-out).
 3. **Large multi-tier diffs**: Triage at **Tier 1** and cap fan-out at **2 parallel buckets** (Tier 1–2 combined + Tier 3–4 combined)—never spawn a subagent for 1–2 small files. Trigger the fail-safe question if the active provider/models are unrecognized.
 4. **Delta-only re-reviews**: After fixes, inspect only files touched since the prior pass alongside the prior findings list in **1 single pass** without re-fanning out unchanged tiers.
 

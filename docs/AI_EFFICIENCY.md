@@ -5,8 +5,8 @@ Realm keeps strong models on high-risk work (see [`docs/MODEL_ROUTING.md`](MODEL
 ## 1. Deterministic Gate Before AI Review
 
 Run [`./scripts/check.sh`](../scripts/check.sh) **before** invoking `code-reviewer`:
-- Checks `dart format --output=none --set-exit-if-changed .`, `dart analyze`, and `dart test` / `flutter test` across every workspace package.
-- Never spend LLM tokens discovering formatting nits, lint errors, missing imports, or broken unit tests.
+- Checks `dart format --output=none --set-exit-if-changed .`, `dart analyze`, [`./scripts/check_hygiene.py`](../scripts/check_hygiene.py) (relative links, model-ID single source, workspace `pubspec.yaml` + no legacy `genui`, no hardcoded `lib/` URLs), and `dart test --reporter=failures-only` / `flutter test --reporter=failures-only` (quiet on pass).
+- Never spend LLM tokens discovering formatting nits, lint errors, broken links, missing imports, or broken unit tests.
 
 ## 2. Context & Tool Hygiene
 
@@ -19,11 +19,13 @@ Run [`./scripts/check.sh`](../scripts/check.sh) **before** invoking `code-review
 ## 3. Agent-Calling & Subagent Efficiency
 
 Every subagent spawn pays a full cold-start cost (system prompt, tool schemas, `AGENTS.md`, and repo discovery). Minimize spawns and redundant work:
-- **Avoid micro-subagents**: For diffs of `<= 15` files (or `<= 500` changed lines), run **1 single `code-reviewer`** at the highest active tier instead of fanning out per tier.
+- **Delegation threshold & tier pinning**: Apply tiny doc syncs (`<= 2` files / `< 30` lines) or single quick `search_web` lookups directly in the active session instead of paying a subagent cold start. Batch substantial doc updates to [`doc-writer`](../.agents/agents/doc-writer.md) (pinning Tier 1 via `swarm` when the coordinator is on Tier 3–4) and multi-source research (`3+` queries) to `web-researcher`.
+- **Context handoff**: Pass pre-computed `git diff --stat`, changed file list, active tier, and fresh `./scripts/check.sh` output in subagent briefs so workers skip redundant discovery and test runs.
+- **Avoid micro-subagents**: For diffs of `<= 15` files **and** `<= 500` changed lines, run **1 single `code-reviewer`** at the highest active tier instead of fanning out per tier.
 - **Cap multi-tier fan-out at 2 buckets**: On large multi-tier diffs, group into at most **2 parallel buckets** (Tier 1–2 combined + Tier 3–4 combined)—never spawn a dedicated subagent for 1–2 small files.
+- **Exclude diff noise**: Omit `pubspec.lock`, `*.g.dart`, and `*.freezed.dart` from full review diffs (inspect lockfiles via summary only when auditing dependencies).
 - **Delta-only re-reviews**: After fixes, pass only the files changed since the prior pass plus the previous findings list and verify in **1 single pass** without re-fanning out unchanged tiers.
 - **Trust fresh `./scripts/check.sh` results**: Caller runs `./scripts/check.sh` once and reports the passing output; `code-reviewer` does not re-run tests inside child reviewers.
-- **Single-pass batched docs**: Route all `README.md` and `docs/` updates to [`doc-writer`](../.agents/agents/doc-writer.md) in **one batched pass** at the end of a feature (Tier 1).
 
 ## 4. High-Autonomy Execution Defaults
 

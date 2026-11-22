@@ -11,11 +11,11 @@ Monorepo for multiple apps (primarily Dart & Flutter, plus supporting tools). Ke
 - [Model Routing](docs/MODEL_ROUTING.md) — Gemini & Claude 4-tier model ladder, minimum floor, and unknown-provider fail-safe.
 - [Code Review Policy](docs/REVIEW_POLICY.md) — 4-tier risk-based review routing, severity thresholds, and fix routing.
 - [Agent Improvement & Evals](docs/AGENT_IMPROVEMENT.md) — Autonomous trigger rules, A/B testing ("improve only"), and summary approval flow.
-- [Agent & MCP Setup](docs/AGENT_SETUP.md) — **Read at session start** when working with Dart/Flutter or setting up MCPs/plugins (includes separate Antigravity vs. Claude Code checks).
+- [Agent & MCP Setup](docs/AGENT_SETUP.md) — Read only when a required MCP/plugin is missing or onboarding a new stack/IDE (Antigravity vs. Claude Code).
 - [Git Workflow & Branching](docs/GIT_WORKFLOW.md) — Branch structure (`develop` as main branch; planned `staging` and `production`).
 
 ## Conventions
-- Add per-app or per-stack `AGENTS.md` files inside their respective subdirectories rather than crowding this root file.
-- Route all `README.md` and `docs/` updates to `doc-writer` (agent-first runbook style).
-- Always run `./scripts/check.sh` (format, analyze, tests) before invoking `code-reviewer`, and follow the high-autonomy defaults in [AI Efficiency & Autonomy](docs/AI_EFFICIENCY.md).
-- Proactively invoke `agent-improver` (see [Agent Improvement & Evals](docs/AGENT_IMPROVEMENT.md)) when a user corrects agent behavior, recurring review/setup friction appears, or docs/agents drift—and present its summary for user approval when gated by [Agent Improvement & Evals](docs/AGENT_IMPROVEMENT.md).
+- Scope app/stack rules in `<dir>/AGENTS.md` rather than crowding this root index.
+- `doc-writer` owns `README.md`, `AGENTS.md`, and general `docs/` updates (batch multi-file or substantive doc work; tiny `<= 2` file / `< 30` line syncs may be edited directly following `doc-writer`'s rules).
+- `agent-improver` owns `.agents/**` and agent-ops policy docs (`docs/MODEL_ROUTING.md`, `docs/REVIEW_POLICY.md`, `docs/AGENT_IMPROVEMENT.md`) under its trigger and approval gates.
+- Run `./scripts/check.sh` (format, analyze, hygiene, tests) before `code-reviewer`, and follow high-autonomy defaults in [AI Efficiency & Autonomy](docs/AI_EFFICIENCY.md).

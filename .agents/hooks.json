@@ -1,0 +1,16 @@
+{
+  "dart-autoformat": {
+    "PostToolUse": [
+      {
+        "matcher": "edit_file|write_file",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "../scripts/post_edit_format.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

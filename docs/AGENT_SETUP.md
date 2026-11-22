@@ -5,15 +5,17 @@ This repository is used with both **Antigravity** and **Claude Code**. Their plu
 ## Dart & Flutter
 
 ### Claude Code
-1. **MCP Server**: Check that the `dart` MCP server is available (`claude mcp list` or `.mcp.json`). If it is missing and the task involves Dart or Flutter, prompt the user to add it:
+1. **Project Rules**: Root [`CLAUDE.md`](../CLAUDE.md) imports `@AGENTS.md` automatically so Claude Code receives the same index and conventions.
+2. **MCP Server**: Check that the `dart` MCP server is available (`claude mcp list` or `.mcp.json`). If it is missing and the task involves Dart or Flutter, prompt the user to add it:
    ```bash
    claude mcp add dart -- dart mcp-server
    ```
    *(Requires Dart 3.14+ / Flutter 3.50+ installed locally.)*
-2. **Skills (optional)**: Antigravity's `Dart and Flutter` plugin installs `SKILL.md` files under `~/.gemini/config/plugins/flutter/skills/`. If you want those same skills available in Claude Code, symlink or copy them into `~/.claude/skills/` (or `.claude/skills/` in this repo).
+3. **Skills (optional)**: Antigravity's `Dart and Flutter` plugin installs `SKILL.md` files under `~/.gemini/config/plugins/flutter/skills/`. If you want those same skills available in Claude Code, symlink or copy them into `~/.claude/skills/` (or `.claude/skills/` in this repo).
 
 ### Antigravity
 - Install the official **Dart and Flutter** plugin (`antigravity-plugins-official/plugin/flutter`) from the Marketplace. It bundles the `dart-mcp-server`, Flutter/Dart skills, rules, and `flutter_a11y_agent`.
+- Workspace hook [`.agents/hooks.json`](../.agents/hooks.json) auto-formats edited/written `.dart` files silently via [`scripts/post_edit_format.sh`](../scripts/post_edit_format.sh).
 
 ## Other Tools & Stack MCPs
 

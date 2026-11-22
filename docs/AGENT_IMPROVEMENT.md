@@ -4,8 +4,8 @@
 
 ## Allowed Scope & Ownership Split
 
-- **`agent-improver` owns**: `.agents/agents/*.md`, `.agents/skills/**`, and the Experiment Log in this file (`docs/AGENT_IMPROVEMENT.md`), plus behavioral policy syncs (`docs/MODEL_ROUTING.md`, `docs/REVIEW_POLICY.md`, `docs/AGENT_IMPROVEMENT.md`) when gated.
-- **[`doc-writer`](../.agents/agents/doc-writer.md) owns**: general repository documentation and READMEs (`README.md`, `docs/*.md`, `AGENTS.md`). When an improvement requires general docs or README updates, hand off to `doc-writer` in one batched Tier 1 pass.
+- **`agent-improver` owns**: `.agents/**` (agents, skills, hooks) and agent-ops policy docs ([`docs/MODEL_ROUTING.md`](MODEL_ROUTING.md), [`docs/REVIEW_POLICY.md`](REVIEW_POLICY.md), and this file [`docs/AGENT_IMPROVEMENT.md`](AGENT_IMPROVEMENT.md)).
+- **[`doc-writer`](../.agents/agents/doc-writer.md) owns**: general repository documentation and READMEs (`README.md`, `**/README.md`, `AGENTS.md`, `**/AGENTS.md`, and general `docs/*.md`). Batch multi-file or substantive doc updates via `doc-writer` at Tier 1 (tiny `<= 2` file / `< 30` line syncs may be applied directly).
 - **Must never modify**: application or package code under `apps/` or `packages/`.
 
 ## Autonomous Triggers (When to Run vs. Skip)
@@ -70,3 +70,4 @@ Follow [`docs/MODEL_ROUTING.md`](MODEL_ROUTING.md) (referencing Tier 1–4 dynam
 
 | Date | Target | Hypothesis | Benchmark | A vs B | Decision |
 | :--- | :--- | :--- | :--- | :--- | :--- |
+| 2026-11-22 | `.agents/**`, `docs/*`, `scripts/check*`, `CLAUDE.md`, `AGENTS.md` | Quiet `--reporter=failures-only`, deterministic hygiene gate, lazy doc reads, Tier 1 pinning, and prompt de-duplication cut cold-start and per-turn tokens without weakening Tier 1–4 guardrails | Repo-wide token & policy audit (user-approved direct rollout) | Baseline 59.7 KB / mandatory turn-1 reads → lean lazy prompts + 0-token hygiene gate | Accepted |

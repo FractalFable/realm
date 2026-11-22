@@ -8,14 +8,14 @@ Shared model tier policy for multi-agent work, code reviews, fixes, and self-imp
 
 | Tier | Scope / Risk | Gemini | Claude |
 | :--- | :--- | :--- | :--- |
-| **Tier 1 (Lowest)** | Docs, formatting, triage, mechanical fixes | `gemini-4-hydrogen-medium` *(Hydrogen Medium)* | `claude-sonnet-5-5-high` *(Sonnet High)* |
+| **Tier 1 (Lowest)** | Docs, formatting, triage, mechanical fixes | `gemini-4-hydrogen-medium` *(Hydrogen Medium)* | `claude-sonnet-5-5-medium` *(Sonnet Medium)* |
 | **Tier 2 (Low-Mid)** | UI, theming, lints, standard fixes | `gemini-4-hydrogen-high` *(Hydrogen High)* | `claude-sonnet-5-5-high` *(Sonnet High)* |
 | **Tier 3 (High-Mid)** | Business logic, domain, API, DB, deps, A/B evals | `gemini-4-neon-medium` *(Neon Medium)* | `claude-opus-5-5-medium` *(Opus 5 / Opus Medium)* |
 | **Tier 4 (Highest)** | Payments, POS/fiscal, auth, security, prod + human sign-off | `gemini-4-neon-high` *(Neon High)* | `claude-opus-5-5-high` *(Opus High)* |
 
 ## Minimum Floor Rule
 
-- Never downgrade below **Tier 1** (`gemini-4-hydrogen-medium` on Gemini or `claude-sonnet-5-5-high` on Claude).
+- Never downgrade below **Tier 1** (`gemini-4-hydrogen-medium` on Gemini or `claude-sonnet-5-5-medium` on Claude).
 - Do **not** use legacy Flash, Flash Lite, or Haiku models for any tier.
 
 ## Fail-Safe for Other or Unavailable Models
@@ -35,5 +35,5 @@ When `swarm(action: "models", all: true)` shows newer Gemini or Claude models th
 
 ## Harness Note (Antigravity)
 
-- `swarm` is available only to the main/coordinator agent (never list `swarm` in `.agents/agents/*.md` `tools:` frontmatter). When the coordinator needs exact per-tier model pinning, use `swarm` (`action: "add"`, `model: "<model-id-or-display-name>"`).
+- `swarm` is available only to the main/coordinator agent (never list `swarm` in `.agents/agents/*.md` `tools:` frontmatter). Calling `invoke_subagent(Model: "inherit")` from a Tier 3–4 coordinator executes Tier 1–2 agents (`doc-writer`, `web-researcher`, Tier 1–2 `code-reviewer`) at Tier 3–4 cost; prefer `swarm(action: "add", model: "<Tier 1/2 ID>")` when delegating substantial Tier 1–2 work from a higher-tier coordinator.
 - Custom subagents (`mainAgent: true` or `subagent: true`) without `swarm` rely on coordinator-passed context or dispatch child workers via `invoke_subagent`, whose `Model` argument only exposes coarse presets (`inherit`, `flash_lite`, `flash`, `pro`). **Never pass `flash_lite` or `flash`**; pass `inherit` (only when the parent session already meets or exceeds the target tier's floor) or `pro`, and call `ask_question` if active provider or tier compliance is uncertain.
