@@ -2,7 +2,7 @@
 
 *Status: Accepted direction (2026-11-22).*
 
-**Grimoire** is Realm's multi-platform (iOS, Android, macOS, Web), end-to-end encrypted (E2EE), interactive note-taking application. Notes are structured, linkable, scriptable, embed-capable, and powered by local-first RAG and A2UI.
+**Grimoire** is Realm's multi-platform (starting **Web-first**, expanding next to **macOS and Windows**, with iOS/Android later), end-to-end encrypted (E2EE), interactive note-taking application. Notes are structured, linkable, scriptable, embed-capable, and powered by local-first RAG and A2UI. All `packages/*` remain platform-neutral behind `LocalVaultStore` and `ScriptRuntime` interfaces, using Realm's **modern-fantasy UI** (`realm_ui`, dynamically seeded from `AppBranding`) and **pure-Dart shared DTOs** (`grimoire_core` / `grimoire_protocol`) with zero code generation.
 
 ## Packages & Apps
 

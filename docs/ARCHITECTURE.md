@@ -2,7 +2,7 @@
 
 *Status: Accepted direction, details Proposed (2026-11-22). Ecosystem versions verified on that date.*
 
-Realm is built and maintained mostly by AI agents, and few humans will read the code. Every decision here favors what makes agents reliable: **strict types, codegen over hand-written glue, small packages with one job, one obvious way to do each thing, fast deterministic tests, and a `CLAUDE.md` in every package.** A second goal is **no framework lock-in**: every layer is plain Dart, plain SQL, or a standard container, so any piece can be swapped without a rewrite.
+Realm is built and maintained mostly by AI agents, and few humans will read the code. Every decision here favors what makes agents reliable: **strict types, plain Dart 3.14 primary constructors and sealed classes (no code generation), small packages with one job, one obvious way to do each thing, fast deterministic tests, and a `CLAUDE.md` in every package.** A second goal is **no framework lock-in**: every layer is plain Dart, plain SQL, or a standard container, so any piece can be swapped without a rewrite.
 
 Decisions already made elsewhere still hold: three-layer config and BYOK ([Config & Secrets](CONFIG_AND_SECRETS.md)), pub workspaces and `realm_lints` ([Monorepo](MONOREPO.md)), risk tiers ([Review Policy](REVIEW_POLICY.md)), A2UI isolation ([A2UI](A2UI.md)).
 
@@ -21,11 +21,11 @@ Decisions already made elsewhere still hold: three-layer config and BYOK ([Confi
 | D2 | Hosting | **One cheap VPS**, Docker Compose: Caddy + the app's server + Postgres, one domain per app instance | Managed cloud services, Kubernetes, Redis |
 | D3 | Backend | **Relic 2** (`relic` router + `relic_native` adapter) in each app's server (`apps/tavern_server`), shared server building blocks in `realm_server_kit`, typed endpoints | Serverpod (locks models, ORM, client, and auth to one framework), shelf (slower, fewer typed APIs), Dart Frog (no release since 2025-11) |
 | D4 | Database | **PostgreSQL 16** via `package:postgres` 3.x with plain SQL; numbered SQL migrations applied by the server at startup | SQLite (runner-up), drift (no stable Postgres 2.x), ORMs |
-| D5 | Shared DTOs | **`packages/realm_protocol`**: the `Endpoint`, `ApiError`, and `Result` machinery; each app's `freezed` + `json_serializable` DTOs and endpoint constants in `<app>_protocol` (`tavern_protocol`), used by that app's server and clients | Duplicated client/server classes, OpenAPI |
-| D6 | State | **`flutter_bloc` Cubits** with sealed `freezed` states | Riverpod, `ChangeNotifier`, `get_it` |
-| D7 | Routing | **`go_router` + `go_router_builder`** typed routes | String paths, `auto_route` |
+| D5 | Shared DTOs | **`packages/realm_protocol`**: the `Endpoint`, `ApiError`, and `Result` machinery; each app's hand-written pure-Dart immutable DTOs (`fromJson`/`toJson`) and endpoint constants in `<app>_protocol` (`tavern_protocol`, `grimoire_protocol`), shared directly between Dart servers and Flutter clients | Duplicated client/server classes, OpenAPI, codegen |
+| D6 | State | **`flutter_bloc` Cubits** with plain Dart 3.14 sealed class states | Riverpod, `ChangeNotifier`, `get_it`, `freezed` |
+| D7 | Routing | **`go_router`** with thin hand-written typed route helpers | Untyped string paths scattered across widgets, `go_router_builder`, `auto_route` |
 | D8 | Live updates | One **WebSocket** per client (staff: signed-in session; guest: their own order's token); the client refetches on reconnect | Polling, a message broker |
-| D9 | Codegen | `build_runner` (`freezed`, `json_serializable`, `go_router_builder`) behind `./scripts/gen.sh`; generated files committed | Hand-written `==`/`copyWith`/`fromJson`, macros (cancelled) |
+| D9 | No codegen | **Code generation is frowned upon.** Write plain Dart 3.14 primary constructors, sealed classes, pattern matching, and hand-written `fromJson`/`toJson`/`copyWith`/`==` | `build_runner`, `freezed`, `json_serializable`, `go_router_builder`, `*.g.dart`, `*.freezed.dart`, macros |
 | D10 | Packages | Thin apps, one package per feature named `<app>_<feature>`, app-neutral building blocks in `realm_*`, strict import direction (§4) | Feature folders inside each app |
 | D11 | BYOK | Existing envelope-encryption design, isolated in `packages/realm_vault` | Secrets mixed into query code |
 | D12 | Tests | Pure-Dart unit > Cubit > widget > server-with-Postgres > E2E smoke | Large E2E suites as the main proof |
@@ -118,12 +118,12 @@ packages/realm_crypto                   (pure Dart client E2EE crypto, app-neutr
 | Package | Contains | May depend on | Never |
 | :--- | :--- | :--- | :--- |
 | `realm_core` | Value types, validation, `ClientEndpointConfig`, `AppBranding`/`AppBootstrap`, `VenueBootstrap` compat | `meta` | Flutter, IO, HTTP, app-specific domain words |
-| `realm_protocol` | `Endpoint` descriptor type, `ApiError`, `Result`, `LiveEvent` envelope, DTOs shared by every app | `realm_core`, `freezed_annotation`, `json_annotation` | Flutter, HTTP clients, `dart:io`, any app's packages |
+| `realm_protocol` | `Endpoint` descriptor type, `ApiError`, `Result`, `LiveEvent` envelope, DTOs shared by every app | `realm_core`, `meta` | Flutter, HTTP clients, `dart:io`, any app's packages |
 | `realm_ui` | Theme from `AppBranding` / `VenueBranding`, breakpoints, design-system widgets | `realm_core`, `material_ui` | Network, business logic, any app's packages |
 | `realm_l10n` | ARB files + `flutter gen-l10n` output | Flutter | App-specific copy (comes from the server) |
 | `realm_client` | HTTP + WebSocket client for `Endpoint`s, bootstrap fetch, session storage | `realm_core`, `realm_protocol` | Widgets, any app's packages |
 | `<app>_core` (e.g. `tavern_core`, `grimoire_core`) | App-specific pure-Dart domain types (`Money`, `NoteDocument`, `NoteGraph`, etc.) | `realm_core`, `meta` | Flutter, IO, HTTP, another app's packages |
-| `<app>_protocol` (e.g. `tavern_protocol`) | That app's `freezed` DTOs, `Endpoint` constants, live event types | `realm_core`, `realm_protocol`, `freezed_annotation`, `json_annotation` | Flutter, HTTP clients, `dart:io`, another app's packages |
+| `<app>_protocol` (e.g. `tavern_protocol`, `grimoire_protocol`) | That app's pure-Dart shared DTOs, `Endpoint` constants, live event types | `realm_core`, `realm_protocol`, `meta` | Flutter, HTTP clients, `dart:io`, another app's packages |
 | `<app>_<feature>` (e.g. `tavern_menu`) | One feature: `lib/src/ui/`, `lib/src/cubit/`, `lib/src/repositories/` | `realm_*` client packages, its own `<app>_*` packages | Another feature package; another app's packages; `api.call` outside `repositories/` |
 | `realm_server_kit` | Endpoint helper, migrator, config and secret loading, rate limiting, WebSocket hub | `realm_core`, `realm_protocol`, `relic`, `postgres` | Flutter, any app's packages |
 | `realm_auth` | Accounts, sessions, invites, setup link, password hashing, with its own migrations | `realm_core`, `realm_protocol`, `realm_server_kit`, crypto lib | Flutter, any app's packages |
@@ -158,7 +158,7 @@ Rules:
 
 **One rule**: if it crosses the wire, it is defined once in `realm_protocol`. Agents never write a class twice.
 
-- New DTOs are `@freezed` classes with `json_serializable`; enums use `@JsonEnum(alwaysCreate: true)`; unknown enum values fail decoding.
+- New DTOs are plain immutable pure-Dart classes using Dart 3.14 primary constructors, hand-written `fromJson`/`toJson`, `==`/`hashCode`, and `copyWith`, shared directly between Dart backend servers and Flutter clients; unknown enum values fail decoding. Code generation is frowned upon—never add `build_runner`, `freezed`, or `json_serializable`.
 - `realm_core` keeps the existing hand-validated contracts (`ClientEndpointConfig`, `VenueBootstrap`, `VenueBranding`, `VenueCapabilities`, `IntegrationKeyStatus`). They are small, security-relevant, and already tested; `realm_protocol` reuses them rather than duplicating them.
 - Input validation lives in `realm_core` functions, called by the Cubit (fast feedback) and the server endpoint (authority). The server is always the authority.
 - Changing any shared DTO is at least Tier 3 ([Review Policy](REVIEW_POLICY.md) rule 1).
@@ -167,12 +167,12 @@ Rules:
 
 **State: `flutter_bloc` Cubits, not Riverpod.** Both work. Cubits win for agents because the pattern is small and explicit (call a method, emit a state), the API has barely changed between versions so agent output does not mix generations, and `bloc_test` gives fast deterministic tests. Riverpod 3 changed its API substantially from 2.x, which makes agent-written code more likely to use the wrong version. Do not mix the two.
 - One Cubit per screen or flow, in `<app>_<feature>/lib/src/cubit/`. Use a `Bloc` only when you need event transforms such as debounce.
-- States are sealed `freezed` unions (`initial | loading | ready | failure`). Never use nullable flags such as `isLoading` plus `error`.
+- States are plain Dart sealed class unions (`initial | loading | ready | failure`)—no `freezed` codegen. Never use nullable flags such as `isLoading` plus `error`.
 - Cubits talk to repositories only. Repositories return typed results; they do not throw for expected failures.
 - Dependency injection uses `RepositoryProvider`/`BlocProvider` wired in the app. No service locator.
 - Risk to watch: `flutter_bloc` 9.1.1 (2025-05) is the latest release. That is stable, not abandoned, but recheck before 2027.
 
-**Routing: `go_router` with `go_router_builder`.** Routes are generated typed classes (`const MenuRoute(tableId: 'x').go(context)`), so a renamed parameter is a compile error. Real URLs matter on web: guests arrive from a table QR code link, and browser back/forward and refresh must work. Each app owns its route tree; features expose screens, not routes. The Tavern staff app is built with `--base-href /staff/`.
+**Routing: `go_router` with hand-written typed route helpers.** Define small immutable route objects or typed navigation helper methods per app (no `go_router_builder` codegen), so a renamed parameter is still a compile error. Real URLs matter on web: guests arrive from a table QR code link, and browser back/forward and refresh must work. Each app owns its route tree; features expose screens, not routes. The Tavern staff app is built with `--base-href /staff/`.
 
 ## 8. BYOK Secrets and Bootstrap (D11)
 
@@ -188,6 +188,7 @@ Storage, precedence, rotation, and RBAC are already decided in [Config & Secrets
 - Startup order: resolve `ClientEndpointConfig` → fetch bootstrap → build `RealmTheme` from `VenueBranding` → first real frame. Show a neutral, unbranded splash until the bootstrap arrives.
 - Cache the last good bootstrap in browser storage and use it on the next load, then refresh in the background.
 - UI strings come from `realm_l10n`. Venue-specific copy (name, tagline, menu text) comes only from the server.
+- **Modern Fantasy UI direction**: `realm_ui` establishes a modern-fantasy visual system (warm parchment/vellum light surfaces, deep obsidian/velvet dark surfaces, subtle gilded hairline borders, editorial serif display headings paired with crisp sans-serif body and monospace code/rune text) while deriving all palette colors dynamically from `AppBranding.primaryColorArgb` so every instance remains white-label and WCAG-compliant.
 
 ## 10. Testing Strategy (D12)
 
@@ -204,19 +205,18 @@ Fast and deterministic first. `./scripts/check.sh` runs every layer that is conf
 - Every widget and screen also meets the testability and a11y contract in [Testing](TESTING_AND_DEBUGGING.md) §2 (`ValueKey`, `Semantics`, guideline assertions); every new app follows the checklist in §5 there.
 - Fakes over mocks: each repository has a hand-written `Fake<Name>Repository` next to the interface, so tests read like the real code.
 - Server tests need Postgres: a service container in CI, and a local Postgres in agent sessions. Until that exists, keep logic in `services/` so the unit layer covers it.
-- CI fails if `./scripts/gen.sh` changes any file (stale generated code).
 
 ## 11. Agent Conventions
 
 **Per-package `CLAUDE.md`** (contains `@AGENTS.md`) plus an `AGENTS.md` of at most about 25 lines with these headings: *Purpose* (one line), *Allowed deps*, *Public API* (exported file), *Commands* (test, gen), *Invariants*, *Tier*. [`packages/realm_ui/AGENTS.md`](../packages/realm_ui/AGENTS.md) is the model.
 
 **Golden paths** (the one way):
-- *New feature*: create `packages/<app>_<feature>` with `lib/src/ui/`, `lib/src/cubit/`, `lib/src/repositories/`, and `AGENTS.md` → DTOs and `Endpoint`s in `<app>_protocol` → `./scripts/gen.sh` → server endpoint + service + repository → app repository + fake → Cubit + tests → screen with `ValueKey`/`Semantics` + widget test with a11y guidelines ([Testing](TESTING_AND_DEBUGGING.md) §2) → typed route in the app.
-- *New endpoint*: DTOs + `Endpoint` constant in `<app>_protocol` → `./scripts/gen.sh` → `endpoints/` registration (thin) → `services/` logic + unit tests → `repositories/` SQL → server test.
+- *New feature*: create `packages/<app>_<feature>` with `lib/src/ui/`, `lib/src/cubit/`, `lib/src/repositories/`, and `AGENTS.md` → DTOs and `Endpoint`s in `<app>_protocol` → server endpoint + service + repository → app repository + fake → Cubit + tests → screen with `ValueKey`/`Semantics` + widget test with a11y guidelines ([Testing](TESTING_AND_DEBUGGING.md) §2) → typed route in the app.
+- *New endpoint*: DTOs + `Endpoint` constant in `<app>_protocol` → `endpoints/` registration (thin) → `services/` logic + unit tests → `repositories/` SQL → server test.
 - *Schema change*: new `migrations/NNNN_<slug>.sql` (additive) → update `schema.sql` → repository SQL → server test → rollback plan in the PR (Tier 4).
 - *New BYOK provider*: add to `IntegrationProvider` → adapter in the server `integrations` module → capability flag computed in `bootstrap` → Tier 4 review.
 
-**Never**: hand-edit generated files (`*.g.dart`, `*.freezed.dart`), add a second state or DI library, build SQL with string interpolation, call HTTP directly from a feature, or put a secret in a client package.
+**Never**: introduce code generation (`build_runner`, `freezed`, `json_serializable`, `go_router_builder`), add a second state or DI library, build SQL with string interpolation, call HTTP directly from a feature, or put a secret in a client package.
 
 ## 12. Tavern: Sign-In, Payments, Tables, Bills, Languages
 
@@ -249,7 +249,7 @@ Decided by the operator on 2026-11-22: staff and guest apps first, web only and 
 ## 13. Follow-Up Work
 
 1. Generalize `realm_core` & `realm_ui` (`AppBranding` / `AppBootstrap`, preserving `Venue*` compat) and scaffold `packages/tavern_core` and `packages/grimoire_core`.
-2. Scaffold `packages/realm_protocol` with the `Endpoint` type, `ApiError`, `Result`, and `./scripts/gen.sh`, plus the CI generated-code drift check.
+2. Scaffold `packages/realm_protocol` with the pure-Dart `Endpoint` type, `ApiError`, `Result`, and `LiveEvent` envelope (no codegen).
 3. Scaffold `packages/realm_server_kit` (Relic endpoint helper, migrator, Postgres test harness) and `packages/realm_a2ui`.
 4. Scaffold `apps/tavern_server` (bootstrap endpoint, schema check), `apps/grimoire_server`, `apps/tavern_staff`, `apps/tavern_guest`, `apps/grimoire`, `compose.yaml`, and the Caddyfile. Uncomment `- apps/*` in the root `pubspec.yaml`.
 5. Add `realm_client`, then `tavern_protocol` and the first Tavern feature package (guest menu) following §11.
