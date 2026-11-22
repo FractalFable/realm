@@ -1,0 +1,17 @@
+name: realm_crypto
+description: App-neutral client-side AEAD encryption and key derivation primitives (Tier 4).
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.14.0
+
+resolution: workspace
+
+dependencies:
+  cryptography: ^2.9.0
+  meta: ^1.17.0
+
+dev_dependencies:
+  realm_lints: ^0.1.0
+  test: ^1.30.0
