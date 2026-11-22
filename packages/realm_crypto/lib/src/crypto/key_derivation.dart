@@ -28,9 +28,9 @@ class const Argon2idParameters._({
     if (iterations < 1) {
       throw const RealmCryptoException('Argon2id iterations must be >= 1.');
     }
-    if (memoryKiB < 4 * parallelism || memoryKiB % (4 * parallelism) != 0) {
+    if (memoryKiB < 8 * parallelism || memoryKiB % (4 * parallelism) != 0) {
       throw const RealmCryptoException(
-        'Argon2id memoryKiB must be >= 4 * parallelism and divisible by 4 * parallelism.',
+        'Argon2id memoryKiB must be >= 8 * parallelism and divisible by 4 * parallelism.',
       );
     }
     if (hashLength < 16) {
@@ -93,8 +93,9 @@ class RealmKeyDerivation {
       );
     }
 
-    final passBytes = Uint8List.fromList(utf8.encode(passphrase));
+    final passBytes = utf8.encode(passphrase);
     final secretKey = SecretKeyData(passBytes, overwriteWhenDestroyed: true);
+    SecretKey? derived;
     try {
       final argon2id = Argon2id(
         parallelism: parameters.parallelism,
@@ -102,18 +103,11 @@ class RealmKeyDerivation {
         iterations: parameters.iterations,
         hashLength: parameters.hashLength,
       );
-      final derived = await argon2id.deriveKey(
-        secretKey: secretKey,
-        nonce: salt,
-      );
+      derived = await argon2id.deriveKey(secretKey: secretKey, nonce: salt);
       final rawBytes = await derived.extractBytes();
-      final out = Uint8List.fromList(rawBytes);
-      if (rawBytes is Uint8List) {
-        rawBytes.fillRange(0, rawBytes.length, 0);
-      }
-      derived.destroy();
-      return out;
+      return Uint8List.fromList(rawBytes);
     } finally {
+      derived?.destroy();
       secretKey.destroy();
     }
   }
@@ -145,17 +139,17 @@ class RealmKeyDerivation {
       Uint8List.fromList(inputKeyBytes),
       overwriteWhenDestroyed: true,
     );
+    SecretKeyData? derived;
     try {
       final hkdf = Hkdf(hmac: Hmac.sha256(), outputLength: outputLength);
-      final derived = await hkdf.deriveKey(
+      derived = await hkdf.deriveKey(
         secretKey: inputKey,
         nonce: salt,
         info: utf8.encode(info),
       );
-      final out = Uint8List.fromList(derived.bytes);
-      derived.destroy();
-      return out;
+      return Uint8List.fromList(derived.bytes);
     } finally {
+      derived?.destroy();
       inputKey.destroy();
     }
   }

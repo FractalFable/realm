@@ -219,23 +219,23 @@ class RealmAeadCipher {
       Uint8List.fromList(keyBytes),
       overwriteWhenDestroyed: true,
     );
+    List<int>? clearBytes;
     try {
       final box = SecretBox(
         payload.ciphertext,
         nonce: payload.nonce,
         mac: Mac(payload.mac),
       );
-      final clearBytes = await cipher.decrypt(
-        box,
-        secretKey: secretKey,
-        aad: aad,
-      );
+      clearBytes = await cipher.decrypt(box, secretKey: secretKey, aad: aad);
       return Uint8List.fromList(clearBytes);
     } on SecretBoxAuthenticationError {
       throw const RealmCryptoException(
         'AEAD authentication failed (wrong key, tampered data, or AAD mismatch).',
       );
     } finally {
+      if (clearBytes case final Uint8List bytes) {
+        bytes.fillRange(0, bytes.length, 0);
+      }
       secretKey.destroy();
     }
   }
