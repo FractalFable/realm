@@ -4,6 +4,8 @@ Monorepo for multiple apps (primarily Dart & Flutter, plus supporting tools). Ke
 
 ## Docs Index
 - [Project Overview](docs/PROJECT_OVERVIEW.md) — Open-source pub/restaurant management goals (white-label branding, BYOK API keys, self-hosting).
+- [Monorepo & Linting](docs/MONOREPO.md) — Dart Pub Workspace layout, shared `realm_lints` presets, and workspace commands.
+- [Code Review Policy](docs/REVIEW_POLICY.md) — 4-tier risk-based review routing (`flash_lite`/`flash` for docs/UI, `pro` + human sign-off for logic/payments).
 - [Agent & MCP Setup](docs/AGENT_SETUP.md) — **Read at session start** when working with Dart/Flutter or setting up MCPs/plugins (includes separate Antigravity vs. Claude Code checks).
 - [Git Workflow & Branching](docs/GIT_WORKFLOW.md) — Branch structure (`develop` as main branch; planned `staging` and `production`).
 

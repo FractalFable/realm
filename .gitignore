@@ -1,0 +1,26 @@
+# Dart & Flutter tooling
+.dart_tool/
+.packages
+build/
+coverage/
+**/generated_plugin_registrant.dart
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+
+# Note: Keep the root pubspec.lock tracked for reproducible workspace builds.
+# Ignore nested package lockfiles if any non-workspace package is created accidentally:
+apps/**/pubspec.lock
+packages/**/pubspec.lock
+
+# IDEs & OS
+*.iml
+.idea/
+.DS_Store
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+
+# Agent worktrees
+.claude/worktrees/

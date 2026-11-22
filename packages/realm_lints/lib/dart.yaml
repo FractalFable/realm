@@ -1,0 +1,126 @@
+include: package:lints/recommended.yaml
+
+analyzer:
+  language:
+    strict-casts: true
+    strict-inference: true
+    strict-raw-types: true
+  exclude:
+    - build/**
+    - "**/*.g.dart"
+    - "**/*.freezed.dart"
+  errors:
+    cancel_subscriptions: error
+    close_sinks: error
+    dead_code: warning
+    discarded_futures: error
+    missing_required_param: error
+    missing_return: error
+    unawaited_futures: error
+    unused_import: warning
+    unused_local_variable: warning
+
+formatter:
+  page_width: 80
+
+linter:
+  rules:
+    - always_declare_return_types
+    - always_put_required_named_parameters_first
+    - async_return_with_no_await
+    - avoid_bool_literals_in_conditional_expressions
+    - avoid_catches_without_on_clauses
+    - avoid_catching_errors
+    - avoid_double_and_int_checks
+    - avoid_dynamic_calls
+    - avoid_equals_and_hash_code_on_mutable_classes
+    - avoid_escaping_inner_quotes
+    - avoid_field_initializers_in_const_classes
+    - avoid_final_parameters
+    - avoid_futureor_void
+    - avoid_implementing_value_types
+    - avoid_js_rounded_ints
+    - avoid_multiple_declarations_per_line
+    - avoid_positional_boolean_parameters
+    - avoid_print
+    - avoid_redundant_argument_values
+    - avoid_setters_without_getters
+    - avoid_slow_async_io
+    - avoid_type_to_string
+    - avoid_types_on_closure_parameters
+    - avoid_unused_constructor_parameters
+    - avoid_void_async
+    - cancel_subscriptions
+    - cascade_invocations
+    - cast_nullable_to_non_nullable
+    - close_sinks
+    - combinators_ordering
+    - comment_references
+    - conditional_uri_does_not_exist
+    - deprecated_consistency
+    - deprecated_member_use_from_same_package
+    - directives_ordering
+    - discarded_futures
+    - document_ignores
+    - eol_at_end_of_file
+    - implicit_reopen
+    - join_return_with_assignment
+    - leading_newlines_in_multiline_strings
+    - literal_only_boolean_expressions
+    - matching_super_parameters
+    - missing_code_block_language_in_doc_comment
+    - missing_whitespace_between_adjacent_strings
+    - no_adjacent_strings_in_list
+    - no_default_cases
+    - no_literal_bool_comparisons
+    - no_runtimetype_tostring
+    - no_self_assignments
+    - noop_primitive_operations
+    - omit_local_variable_types
+    - only_throw_errors
+    - parameter_assignments
+    - prefer_asserts_in_initializer_lists
+    - prefer_asserts_with_message
+    - prefer_const_constructors
+    - prefer_const_declarations
+    - prefer_final_in_for_each
+    - prefer_final_locals
+    - prefer_foreach
+    - prefer_if_elements_to_conditional_expressions
+    - prefer_int_literals
+    - prefer_mixin
+    - prefer_null_aware_method_calls
+    - prefer_relative_imports
+    - prefer_single_quotes
+    - remove_deprecations_in_breaking_versions
+    - simplify_variable_pattern
+    - sort_constructors_first
+    - sort_pub_dependencies
+    - sort_unnamed_constructors_first
+    - switch_on_type
+    - test_types_in_equals
+    - throw_in_finally
+    - tighten_type_of_initializing_formals
+    - type_annotate_public_apis
+    - unawaited_futures
+    - unnecessary_async
+    - unnecessary_breaks
+    - unnecessary_lambdas
+    - unnecessary_null_checks
+    - unnecessary_parenthesis
+    - unnecessary_primary_constructor_body
+    - unnecessary_raw_strings
+    - unnecessary_statements
+    - unnecessary_unawaited
+    - unreachable_from_main
+    - unsafe_variance
+    - use_declaring_parameters
+    - use_enums
+    - use_is_even_rather_than_modulo
+    - use_named_constants
+    - use_raw_strings
+    - use_setters_to_change_properties
+    - use_string_buffers
+    - use_test_throws_matchers
+    - use_to_and_as_if_applicable
+    - use_truncating_division

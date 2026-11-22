@@ -1,0 +1,12 @@
+include:
+  - package:realm_lints/dart.yaml
+  - package:flutter_lints/flutter.yaml
+
+linter:
+  rules:
+    - flutter_style_todos
+    - migrate_design_widgets
+    - prefer_const_literals_to_create_immutables
+    - sized_box_shrink_expand
+    - use_colored_box
+    - use_decorated_box

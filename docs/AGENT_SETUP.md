@@ -9,7 +9,7 @@ This repository is used with both **Antigravity** and **Claude Code**. Their plu
    ```bash
    claude mcp add dart -- dart mcp-server
    ```
-   *(Requires Dart/Flutter SDK 3.13+ installed locally.)*
+   *(Requires Dart 3.14+ / Flutter 3.50+ installed locally.)*
 2. **Skills (optional)**: Antigravity's `Dart and Flutter` plugin installs `SKILL.md` files under `~/.gemini/config/plugins/flutter/skills/`. If you want those same skills available in Claude Code, symlink or copy them into `~/.claude/skills/` (or `.claude/skills/` in this repo).
 
 ### Antigravity

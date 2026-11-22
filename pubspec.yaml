@@ -1,0 +1,9 @@
+name: realm_workspace
+publish_to: none
+
+environment:
+  sdk: ^3.14.0
+
+workspace:
+  - packages/*
+  # - apps/*  # Uncomment once the first Dart/Flutter app is added under apps/
