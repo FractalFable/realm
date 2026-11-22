@@ -6,15 +6,15 @@ void main() {
     test('stores operator branding fields including logoUrl', () {
       final logoUrl = Uri.parse('https://cdn.example.com/logo.png?v=1');
       final branding = VenueBranding(
-        name: 'The Crown',
+        name: 'Example Venue',
         primaryColorArgb: 0xFF6B2D5C,
-        tagline: 'Neighborhood Pub & Kitchen',
+        tagline: 'Example Tagline',
         logoUrl: logoUrl,
       );
 
-      expect(branding.name, 'The Crown');
+      expect(branding.name, 'Example Venue');
       expect(branding.primaryColorArgb, 0xFF6B2D5C);
-      expect(branding.tagline, 'Neighborhood Pub & Kitchen');
+      expect(branding.tagline, 'Example Tagline');
       expect(branding.logoUrl, logoUrl);
     });
 
@@ -31,7 +31,7 @@ void main() {
       for (final invalidTagline in ['', '   ', '\n']) {
         expect(
           () => VenueBranding(
-            name: 'The Crown',
+            name: 'Example Venue',
             primaryColorArgb: 0xFF6B2D5C,
             tagline: invalidTagline,
           ),
@@ -43,8 +43,10 @@ void main() {
     test('rejects invalid primaryColorArgb bounds and zero alpha', () {
       for (final invalidColor in [-1, 0x100000000, 0x006B2D5C, 0x00000000]) {
         expect(
-          () =>
-              VenueBranding(name: 'The Crown', primaryColorArgb: invalidColor),
+          () => VenueBranding(
+            name: 'Example Venue',
+            primaryColorArgb: invalidColor,
+          ),
           throwsArgumentError,
         );
       }
@@ -64,7 +66,7 @@ void main() {
       for (final invalidUri in invalidUris) {
         expect(
           () => VenueBranding(
-            name: 'The Crown',
+            name: 'Example Venue',
             primaryColorArgb: 0xFF6B2D5C,
             logoUrl: invalidUri,
           ),
@@ -76,25 +78,25 @@ void main() {
     test('supports value equality, hashCode, toString, and copyWith', () {
       final logoUrl = Uri.parse('https://example.com/logo.png');
       final a = VenueBranding(
-        name: 'The Crown',
+        name: 'Example Venue',
         primaryColorArgb: 0xFF6B2D5C,
-        tagline: 'Pub & Kitchen',
+        tagline: 'Example Tagline',
         logoUrl: logoUrl,
       );
       final b = VenueBranding(
-        name: 'The Crown',
+        name: 'Example Venue',
         primaryColorArgb: 0xFF6B2D5C,
-        tagline: 'Pub & Kitchen',
+        tagline: 'Example Tagline',
         logoUrl: Uri.parse('https://example.com/logo.png'),
       );
 
       expect(a, equals(b));
       expect(a.hashCode, equals(b.hashCode));
-      expect(a.toString(), contains('VenueBranding(name: The Crown'));
+      expect(a.toString(), contains('VenueBranding(name: Example Venue'));
 
-      final updated = a.copyWith(name: 'The Anchor');
-      expect(updated.name, 'The Anchor');
-      expect(updated.tagline, 'Pub & Kitchen');
+      final updated = a.copyWith(name: 'Updated Venue');
+      expect(updated.name, 'Updated Venue');
+      expect(updated.tagline, 'Example Tagline');
       expect(updated.logoUrl, logoUrl);
       expect(updated, isNot(equals(a)));
 
@@ -102,12 +104,45 @@ void main() {
       expect(cleared.tagline, isNull);
       expect(cleared.logoUrl, isNull);
     });
+
+    test('round-trips valid JSON and rejects malformed JSON', () {
+      final branding = VenueBranding(
+        name: 'Example Venue',
+        primaryColorArgb: 0xFF6B2D5C,
+        tagline: 'Example Tagline',
+        logoUrl: Uri.parse('https://cdn.example.com/logo.png'),
+      );
+
+      final decoded = VenueBranding.fromJson(branding.toJson());
+      expect(decoded, equals(branding));
+
+      expect(
+        () => VenueBranding.fromJson({'name': 123, 'primaryColorArgb': 0xFF1}),
+        throwsArgumentError,
+      );
+      expect(
+        () => VenueBranding.fromJson({'primaryColorArgb': 0xFF6B2D5C}),
+        throwsArgumentError,
+      );
+      expect(
+        () => VenueBranding.fromJson({'name': 'Example Venue'}),
+        throwsArgumentError,
+      );
+      expect(
+        () => VenueBranding.fromJson({
+          'name': 'Example Venue',
+          'primaryColorArgb': 0xFF6B2D5C,
+          'logoUrl': 'javascript:alert(1)',
+        }),
+        throwsArgumentError,
+      );
+    });
   });
 
   group('VenueConfig', () {
     test('defaults hostingMode to selfHosted', () {
       final branding = VenueBranding(
-        name: 'The Crown',
+        name: 'Example Venue',
         primaryColorArgb: 0xFF6B2D5C,
       );
       final config = VenueConfig(branding: branding);
@@ -117,10 +152,10 @@ void main() {
     });
 
     test('accepts dot shorthand for HostingMode and valid apiBaseUrl', () {
-      final apiBaseUrl = Uri.parse('https://api.thecrown.example/v1');
+      final apiBaseUrl = Uri.parse('https://api.example.com/v1');
       final config = VenueConfig(
         branding: VenueBranding(
-          name: 'The Crown',
+          name: 'Example Venue',
           primaryColorArgb: 0xFF6B2D5C,
         ),
         hostingMode: .managed,
@@ -133,7 +168,7 @@ void main() {
 
     test('rejects unsafe, relative, userinfo, or fragment apiBaseUrl', () {
       final branding = VenueBranding(
-        name: 'The Crown',
+        name: 'Example Venue',
         primaryColorArgb: 0xFF6B2D5C,
       );
       final invalidUris = [
@@ -156,7 +191,7 @@ void main() {
 
     test('supports value equality, hashCode, toString, and copyWith', () {
       final branding = VenueBranding(
-        name: 'The Crown',
+        name: 'Example Venue',
         primaryColorArgb: 0xFF6B2D5C,
       );
       final apiUrl = Uri.parse('https://api.example.com');
@@ -167,7 +202,7 @@ void main() {
       );
       final b = VenueConfig(
         branding: VenueBranding(
-          name: 'The Crown',
+          name: 'Example Venue',
           primaryColorArgb: 0xFF6B2D5C,
         ),
         hostingMode: .managed,
@@ -184,6 +219,32 @@ void main() {
 
       final cleared = a.copyWith(apiBaseUrl: () => null);
       expect(cleared.apiBaseUrl, isNull);
+    });
+
+    test('round-trips valid JSON and rejects unknown hostingMode', () {
+      final config = VenueConfig(
+        branding: VenueBranding(
+          name: 'Example Venue',
+          primaryColorArgb: 0xFF6B2D5C,
+        ),
+        hostingMode: .managed,
+        apiBaseUrl: Uri.parse('https://api.example.com/v1'),
+      );
+
+      final decoded = VenueConfig.fromJson(config.toJson());
+      expect(decoded, equals(config));
+
+      expect(
+        () => VenueConfig.fromJson({
+          'branding': config.branding.toJson(),
+          'hostingMode': 'unknown',
+        }),
+        throwsArgumentError,
+      );
+      expect(
+        () => VenueConfig.fromJson(const {'hostingMode': 'managed'}),
+        throwsArgumentError,
+      );
     });
   });
 }

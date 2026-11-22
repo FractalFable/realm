@@ -5,7 +5,7 @@ import 'package:realm_ui/realm_ui.dart';
 
 void main() {
   final branding = VenueBranding(
-    name: 'The Crown',
+    name: 'Example Venue',
     primaryColorArgb: 0xFF6B2D5C,
   );
 

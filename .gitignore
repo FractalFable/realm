@@ -17,10 +17,13 @@ packages/**/pubspec.lock
 .idea/
 .DS_Store
 
-# Environment & secrets
+# Environment, runtime configs & secrets
 .env
 .env.*
 !.env.example
+venue.json
+**/venue.json
+config.local.json
 
 # Agent worktrees
 .claude/worktrees/

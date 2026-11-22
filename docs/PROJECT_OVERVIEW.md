@@ -1,15 +1,21 @@
 # Project Overview
 
-**Realm** is an open-source pub and restaurant management platform. Each operator/venue runs their own instance and retains full control over branding, integrations, and infrastructure.
+**Realm** is an open-source, completely brand-agnostic pub and restaurant management platform. Each operator/venue runs their own instance and retains full control over branding, integrations, and infrastructure.
 
 ## Core Principles
 
-- **Bring Your Own Branding (White-Label)**: Operators supply their own venue branding—name, logos, colors, themes, domain, and copy/assets. Core apps and packages must treat branding as configuration rather than hardcoding venue-specific identity.
-- **Bring Your Own API Keys (BYOK)**: Third-party integrations and optional features are powered by the operator's own API keys supplied via environment variables or runtime configuration—never hardcoded or committed to source control.
-- **Self-Hosted (Bring Your Own Hosting)**: The platform is designed to be deployed and operated on the user's own hosting and infrastructure, with no lock-in to a specific cloud vendor or managed service.
+- **Bring Your Own Branding (White-Label)**: Operators supply their own venue branding—name, logos, colors, themes, domain, and copy/assets—at runtime (see [`docs/CONFIG_AND_SECRETS.md`](CONFIG_AND_SECRETS.md)). Core apps and packages must remain completely white-label.
+- **Bring Your Own API Keys (BYOK)**: Third-party integrations and optional features are powered by the operator's own backend-stored API keys, never hardcoded, committed, or shipped in client binaries.
+- **Self-Hosted (Bring Your Own Hosting)**: The platform is designed to be deployed and operated on the user's own hosting and infrastructure, with no lock-in to a single cloud vendor or managed service.
+
+## Strict Brand-Agnostic Rule
+
+- **Zero fixed brands or external project references**: No files in this repository (code, tests, docs, comments, agent prompts, or commit messages) may mention any fixed venue brand or any external private/test project.
+- **Zero hardcoded URLs or brand strings in `lib/`**: All server endpoints, branding values, and keys enter through runtime/build configuration (`ClientEndpointConfig`, `VenueBootstrap`, backend config/vault).
+- **Generic placeholders only in docs/tests**: Use neutral placeholders like `Example Venue` and `example.com` when illustrating tests or documentation.
 
 ## Implications for Agents & Contributors
 
 - Keep venue branding, copy, and visual assets configurable/overridable across all apps and packages.
-- Externalize all third-party service credentials and API keys behind documented env vars or config schemas, with safe fallbacks/feature gating when a key is omitted.
-- Avoid coupling deployment scripts, networking, or storage assumptions to a single proprietary host; keep infrastructure portable (e.g., standard containers/Docker, configurable base URLs and storage paths).
+- Externalize all third-party service credentials on the backend (`IntegrationKeyStatus` for UI status only), with safe gating (`VenueCapabilities`) when a key is omitted.
+- Avoid coupling deployment scripts, networking, or storage assumptions to a single proprietary host; keep infrastructure portable (standard containers, configurable URLs, and storage paths).

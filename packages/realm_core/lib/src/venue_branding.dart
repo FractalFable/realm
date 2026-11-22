@@ -1,20 +1,20 @@
 import 'package:meta/meta.dart';
 
-/// Supported deployment topologies for a Realm venue instance.
-enum HostingMode { selfHosted, managed }
+import 'uri_validation.dart';
 
-void _validateHttpUri(Uri uri, String name, {bool allowFragment = true}) {
-  if (uri.scheme != 'http' && uri.scheme != 'https') {
-    throw ArgumentError.value(uri, name, 'Must use an http or https scheme.');
-  }
-  if (!uri.hasAuthority || uri.host.isEmpty) {
-    throw ArgumentError.value(uri, name, 'Must include a non-empty host.');
-  }
-  if (uri.userInfo.isNotEmpty) {
-    throw ArgumentError.value(uri, name, 'Must not include userinfo.');
-  }
-  if (!allowFragment && uri.hasFragment) {
-    throw ArgumentError.value(uri, name, 'Must not include a fragment.');
+/// Supported deployment topologies for a Realm venue instance.
+enum HostingMode {
+  selfHosted,
+  managed;
+
+  /// Parses a [HostingMode] from its JSON [name].
+  static HostingMode fromName(String name) {
+    for (final value in values) {
+      if (value.name == name) {
+        return value;
+      }
+    }
+    throw ArgumentError.value(name, 'hostingMode', 'Unknown hosting mode.');
   }
 }
 
@@ -51,9 +51,62 @@ class VenueBranding({
       );
     }
     if (logoUrl case final url?) {
-      _validateHttpUri(url, 'logoUrl');
+      validateHttpUri(url, 'logoUrl');
     }
   }
+
+  /// Decodes and validates a [VenueBranding] from JSON.
+  factory VenueBranding.fromJson(Map<String, Object?> json) {
+    final name = switch (json['name']) {
+      final String value => value,
+      _ => throw ArgumentError.value(
+        json['name'],
+        'name',
+        'Expected a string venue name.',
+      ),
+    };
+    final primaryColorArgb = switch (json['primaryColorArgb']) {
+      final int value => value,
+      _ => throw ArgumentError.value(
+        json['primaryColorArgb'],
+        'primaryColorArgb',
+        'Expected an integer ARGB color.',
+      ),
+    };
+    final tagline = switch (json['tagline']) {
+      null => null,
+      final String value => value,
+      final other => throw ArgumentError.value(
+        other,
+        'tagline',
+        'Expected a string or null tagline.',
+      ),
+    };
+    final logoUrl = switch (json['logoUrl']) {
+      null => null,
+      final String value => parseHttpUri(value, 'logoUrl'),
+      final other => throw ArgumentError.value(
+        other,
+        'logoUrl',
+        'Expected a URI string or null logoUrl.',
+      ),
+    };
+
+    return VenueBranding(
+      name: name,
+      primaryColorArgb: primaryColorArgb,
+      tagline: tagline,
+      logoUrl: logoUrl,
+    );
+  }
+
+  /// Serializes this branding configuration to JSON.
+  Map<String, Object?> toJson() => {
+    'name': name,
+    'primaryColorArgb': primaryColorArgb,
+    'tagline': ?tagline,
+    'logoUrl': ?logoUrl?.toString(),
+  };
 
   /// Returns a copy of this branding with the given fields updated.
   VenueBranding copyWith({
@@ -95,9 +148,62 @@ class VenueConfig({
 }) {
   this {
     if (apiBaseUrl case final url?) {
-      _validateHttpUri(url, 'apiBaseUrl', allowFragment: false);
+      validateHttpUri(
+        url,
+        'apiBaseUrl',
+        allowFragment: false,
+        allowQuery: false,
+      );
     }
   }
+
+  /// Decodes and validates a [VenueConfig] from JSON.
+  factory VenueConfig.fromJson(Map<String, Object?> json) {
+    final branding = switch (json['branding']) {
+      final Map<String, Object?> map => VenueBranding.fromJson(map),
+      final other => throw ArgumentError.value(
+        other,
+        'branding',
+        'Expected a branding JSON object.',
+      ),
+    };
+    final hostingMode = switch (json['hostingMode']) {
+      null => HostingMode.selfHosted,
+      final String value => HostingMode.fromName(value),
+      final other => throw ArgumentError.value(
+        other,
+        'hostingMode',
+        'Expected a hostingMode string.',
+      ),
+    };
+    final apiBaseUrl = switch (json['apiBaseUrl']) {
+      null => null,
+      final String value => parseHttpUri(
+        value,
+        'apiBaseUrl',
+        allowFragment: false,
+        allowQuery: false,
+      ),
+      final other => throw ArgumentError.value(
+        other,
+        'apiBaseUrl',
+        'Expected a URI string or null apiBaseUrl.',
+      ),
+    };
+
+    return VenueConfig(
+      branding: branding,
+      hostingMode: hostingMode,
+      apiBaseUrl: apiBaseUrl,
+    );
+  }
+
+  /// Serializes this configuration to JSON.
+  Map<String, Object?> toJson() => {
+    'branding': branding.toJson(),
+    'hostingMode': hostingMode.name,
+    'apiBaseUrl': ?apiBaseUrl?.toString(),
+  };
 
   /// Returns a copy of this configuration with the given fields updated.
   VenueConfig copyWith({
