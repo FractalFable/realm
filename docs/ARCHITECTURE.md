@@ -19,7 +19,7 @@ Decisions already made elsewhere still hold: three-layer config and BYOK ([Confi
 | D5 | Shared DTOs | **`packages/realm_protocol`**: `freezed` + `json_serializable` DTOs and typed endpoint descriptors, used by server and apps | Duplicated client/server classes, OpenAPI |
 | D6 | State | **`flutter_bloc` Cubits** with sealed `freezed` states | Riverpod, `ChangeNotifier`, `get_it` |
 | D7 | Routing | **`go_router` + `go_router_builder`** typed routes | String paths, `auto_route` |
-| D8 | Live updates | One **WebSocket** per staff client; the client refetches on reconnect | Polling, a message broker |
+| D8 | Live updates | One **WebSocket** per client (staff: signed-in session; guest: their own order's token); the client refetches on reconnect | Polling, a message broker |
 | D9 | Codegen | `build_runner` (`freezed`, `json_serializable`, `go_router_builder`) behind `./scripts/gen.sh`; generated files committed | Hand-written `==`/`copyWith`/`fromJson`, macros (cancelled) |
 | D10 | Packages | Thin apps, one Flutter package per feature, strict import direction (§4) | Feature folders inside each app |
 | D11 | BYOK | Existing envelope-encryption design, isolated in `packages/realm_vault` | Secrets mixed into query code |
@@ -47,7 +47,11 @@ Decisions already made elsewhere still hold: three-layer config and BYOK ([Confi
 | `realm_server` | AOT-compiled Dart server (`dart compile exe`), stateless |
 | `postgres` | Postgres 16 with a named volume; a daily `pg_dump` to a backup volume |
 
+Caddy must fall back to each app's `index.html` for unknown paths under its prefix (`/staff/*` for staff, everything else outside `/api/` and `/ws` for guest), so QR deep links such as `/t/<table-code>` and browser refresh work.
+
 Everything runs on one origin, so apps use the same-origin fallback in `ClientEndpointConfig` and need no `config.json`. The operator supplies only a domain and the secrets in [Config & Secrets](CONFIG_AND_SECRETS.md) §3.
+
+**Shared origin means shared browser storage.** Prefix every storage key with the app name (`realm_staff.`, `realm_guest.`). Staff session tokens live in an `HttpOnly`, `Secure`, `SameSite=Strict` cookie scoped to `Path=/api/` and set by the server, never in `localStorage`, so nothing the guest app runs can read them.
 
 ## 3. Backend: shelf with Typed Endpoints (D3, D5)
 
@@ -77,9 +81,13 @@ Modules: `bootstrap`, `auth`, `venue`, `menu`, `orders`, `live` (WebSocket), `in
 
 `GET /api/v1/bootstrap` keeps its existing path and `realm_core` contract. Provider webhooks get raw-body routes so signatures can be checked.
 
-**Live updates (D8)**: staff clients open `/ws` after sign-in. After an order transaction commits, the `orders` service publishes a typed `LiveEvent` (from `realm_protocol`) to connected clients. Events are hints; after any reconnect the client refetches the current state, so a missed event can never leave the board wrong. Guests get status updates the same way, scoped to their own order.
+**Live updates (D8)**: staff clients open `/ws` after sign-in. After an order transaction commits, the `orders` service publishes a typed `LiveEvent` (from `realm_protocol`) to connected clients. Events are hints; after any reconnect the client refetches the current state, so a missed event can never leave the board wrong. Guests get status updates the same way, scoped to their own order: placing an order returns an unguessable order token (at least 128 random bits), and the guest app uses it both to read that order's status and to open its WebSocket. The token grants nothing else.
+
+**Public endpoints** (bootstrap, menu, place order, guest order status) are rate-limited per IP in the server, and place-order also validates prices and availability server-side; the client total is never trusted.
 
 ## 4. Packages and Dependency Direction (D10)
+
+The table below is authoritative; the diagram only shows the layering.
 
 ```
 apps/realm_staff, apps/realm_guest      (thin shells: routes, DI wiring)
@@ -111,6 +119,8 @@ Every package also takes `realm_lints` as a dev dependency and references siblin
 
 **Directory names are load-bearing**: `cubit/`, `repositories/`, `services/`, `crypto/`, `auth/`, and `migrations/` match the path globs in [Review Policy](REVIEW_POLICY.md), so the right tier applies automatically (`cubit/`, `repositories/`, `services/` are Tier 3; `crypto/`, `auth/`, `migrations/`, `payment*/` are Tier 4). Do not rename them.
 
+Paths the globs miss still get an explicit floor: **everything under `apps/realm_server/` is at least Tier 3** (including `endpoints/`, where authorization is checked, `lib/src/http/`, `live/`, `integrations/`, and `ai/`; `integrations/` is Tier 4 because it decrypts BYOK keys), and **`compose.yaml` and the Caddyfile are Tier 4** (production deploy). The next Review Policy update should add these as globs.
+
 Rules:
 - **Features never import each other.** Cross-feature navigation goes through typed routes owned by the app; shared data goes down into `realm_client`, `realm_protocol`, or `realm_core`.
 - **Apps hold no business logic.** An app is routes, provider wiring, and `main.dart`.
@@ -122,7 +132,7 @@ Rules:
 **Postgres, with SQLite as the runner-up.** SQLite would make backups a file copy, but Postgres handles many guests ordering at once without write locking, gives proper types (`timestamptz`, `numeric`, `jsonb`), and is what the existing BYOK storage design targets. On a 2 GB VPS it costs nothing extra. Plain SQL keeps the database replaceable: no ORM or schema DSL ties the code to a library.
 
 - **Queries**: `package:postgres` 3.x with named parameters only (`Sql.named('... WHERE id = @id')`), never string interpolation. All SQL lives in server `repositories/`.
-- **Migrations**: `apps/realm_server/migrations/NNNN_<slug>.sql`, one file per change, never edited after merge. The server applies pending files at startup, each in a transaction under a Postgres advisory lock, and records them in `schema_migrations`. Migration files are Tier 4.
+- **Migrations**: `apps/realm_server/migrations/NNNN_<slug>.sql`, one file per change, never edited after merge. The server applies pending files at startup, each in a transaction under a Postgres advisory lock, and records them in `schema_migrations`. A file whose first line is `-- realm:no-transaction` runs outside a transaction and may hold only one statement (for `CREATE INDEX CONCURRENTLY`). Migration files are Tier 4.
 - **Deploys roll forward; every migration still needs a rollback plan** ([Review Policy](REVIEW_POLICY.md) requires reversible migrations). Make changes additive (expand, then contract): a destructive change (drop or rename a column) ships in two releases, first stop reading the column, then drop it, so the previous server version keeps working against the new schema. State in the PR how to roll back (previous release + untouched schema, or the latest `pg_dump` restore).
 - **Schema check**: the server test run (§10) applies every migration to an empty database and compares the result with a committed `schema.sql` dump, so drift is caught deterministically.
 - Money columns are `bigint` minor units plus an ISO 4217 currency code. Never floating point.
@@ -195,7 +205,7 @@ Fast and deterministic first. `./scripts/check.sh` runs every layer that is conf
 
 Decided by the operator on 2026-11-22: staff and guest apps first, web only and responsive, no offline ordering, one venue per instance, one cheap VPS. Still open, with the default agents assume until answered:
 
-1. **Staff sign-in.** *Default: the manager signs in with email + password; workers use a short PIN on a device the manager has approved. Needs a Tier 4 design pass.*
+1. **Staff sign-in.** Guest access is already covered by per-order tokens (§3). *Default: the manager signs in with email + password; workers use a short PIN on a device the manager has approved. Needs a Tier 4 design pass.*
 2. **Guest payment.** *Default: guests order without paying online and pay at the counter or table; online payment comes later through a BYOK payment provider.*
 3. **How guests reach the menu.** *Default: a QR code per table linking to `/t/<table-code>`, so orders arrive tagged with the table.*
 4. **First BYOK providers and languages.** Which LLM, payment, and fiscal providers come first, and which UI languages ship first? Fiscal rules depend on the operator's country.
