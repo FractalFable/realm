@@ -50,7 +50,7 @@ Skip entirely on clean first-pass runs.
 
 | Subagent (model) | Delegate when | Handle directly when |
 | :--- | :--- | :--- |
-| [`critic`](../.claude/agents/critic.md) (tiered) | Per the tier table | Tier 1, or single-file Tier 2 |
+| [`critic`](../.claude/agents/critic.md) (tiered) | Per the tier table | Tier 1, or Tier 2 with `< 3` files |
 | [`doc-writer`](../.claude/agents/doc-writer.md) (`sonnet`) | `> 3` doc files or `> 80` changed lines | Smaller doc syncs + `./scripts/check_hygiene.py` |
 | [`web-researcher`](../.claude/agents/web-researcher.md) (`haiku`) | `2+` searches or version verification | One fact checkable via local CLI/files |
 | [`security-auditor`](../.claude/agents/security-auditor.md) (`opus`) | Dependency/CVE audits, lockfile upgrades, SSH patching | Routine non-security edits |
