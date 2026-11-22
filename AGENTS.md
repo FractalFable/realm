@@ -20,6 +20,7 @@ Multi-app monorepo for **Realm** (Dart & Flutter shared platform + modular backe
 
 ## Core Conventions
 - **Zero fixed brands or hardcoded `lib/` URLs**: Use neutral placeholders (`Example Venue`, `example.com`); never ship BYOK secrets in clients.
+- **No code generation**: Code generation (`build_runner`, `freezed`, `json_serializable`, `go_router_builder`) is frowned upon; write plain Dart 3.14 primary constructors, sealed classes, and pure-Dart shared DTOs.
 - **Classify first**: Assign a risk tier (Tier 1–4) before running tools; it decides review, runtime proof, and merge rules.
 - **Subagents** (`.claude/agents/`): `critic` (review), `web-researcher`, `security-auditor`, `doc-writer` (`> 3` files or `> 80` lines). Never spawn `agent-improver` on clean runs.
 - **Deterministic gate first**: `./scripts/check.sh --quiet` must pass before `critic` or any runtime proof; pass `check.sh: PASSED` in the brief.
