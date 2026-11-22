@@ -1,0 +1,17 @@
+name: realm_protocol
+description: App-neutral typed endpoint contracts, error DTOs, Result, and LiveEvent envelopes for Realm.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.14.0
+
+resolution: workspace
+
+dependencies:
+  meta: ^1.17.0
+  realm_core: ^0.1.0
+
+dev_dependencies:
+  realm_lints: ^0.1.0
+  test: ^1.30.0

@@ -17,6 +17,25 @@ MODEL_ID_RE = re.compile(
 WORKSPACE_RES_RE = re.compile(r"^\s*resolution:\s*workspace\s*$", re.MULTILINE)
 LEGACY_GENUI_RE = re.compile(r"^\s*genui\s*:", re.MULTILINE)
 URL_RE = re.compile(r"https?://", re.IGNORECASE)
+PACKAGE_IMPORT_RE = re.compile(
+    r"""^\s*(?:import|export)\s+['"]package:([A-Za-z0-9_]+)/""",
+    re.MULTILINE,
+)
+FORBIDDEN_CODEGEN_PACKAGES = {
+    "build_runner",
+    "freezed",
+    "freezed_annotation",
+    "json_serializable",
+    "go_router_builder",
+}
+PURE_DART_PACKAGES = {
+    "realm_core",
+    "realm_protocol",
+    "realm_crypto",
+    "realm_server_kit",
+    "grimoire_core",
+    "tavern_core",
+}
 
 
 def iter_markdown_files() -> list[pathlib.Path]:
@@ -92,6 +111,38 @@ def check_markdown_files(errors: list[str]) -> None:
                     )
 
 
+def extract_pubspec_dependencies(pubspec_text: str) -> set[str]:
+    """Extract direct dependency package names from a pubspec.yaml without PyYAML."""
+    deps: set[str] = set()
+    in_deps_section = False
+    dep_indent: int | None = None
+
+    for raw_line in pubspec_text.splitlines():
+        line = raw_line.split("#", 1)[0].rstrip()
+        if not line.strip():
+            continue
+        indent = len(line) - len(line.lstrip())
+        stripped = line.lstrip()
+        if indent == 0:
+            in_deps_section = stripped in (
+                "dependencies:",
+                "dev_dependencies:",
+                "dependency_overrides:",
+            )
+            dep_indent = None
+            continue
+        if not in_deps_section:
+            continue
+        if ":" not in stripped:
+            continue
+        if dep_indent is None or indent <= dep_indent:
+            dep_indent = indent
+            pkg_name = stripped.split(":", 1)[0].strip()
+            if pkg_name:
+                deps.add(pkg_name)
+    return deps
+
+
 def check_pubspecs(errors: list[str]) -> None:
     for pattern in ("packages/*/pubspec.yaml", "apps/*/pubspec.yaml"):
         for pubspec in sorted(ROOT.glob(pattern)):
@@ -103,6 +154,69 @@ def check_pubspecs(errors: list[str]) -> None:
                 errors.append(
                     f"{rel}: legacy 'genui:' dependency forbidden (use a2ui_core/a2ui_flutter)"
                 )
+            deps = extract_pubspec_dependencies(text)
+            for forbidden in sorted(deps & FORBIDDEN_CODEGEN_PACKAGES):
+                errors.append(
+                    f"{rel}: codegen dependency '{forbidden}' is forbidden (use plain Dart 3.14 classes)"
+                )
+
+
+def _check_forbidden_edge(
+    source_kind: str,
+    pkg_name: str,
+    target: str,
+    origin: str,
+    errors: list[str],
+) -> None:
+    if source_kind == "packages" and pkg_name.startswith("realm_"):
+        if target.startswith(("tavern_", "grimoire_")):
+            errors.append(
+                f"{origin}: app-neutral '{pkg_name}' must not depend on or import '{target}'"
+            )
+    if pkg_name.startswith("tavern_") and target.startswith("grimoire_"):
+        errors.append(
+            f"{origin}: Tavern package '{pkg_name}' must not depend on or import '{target}'"
+        )
+    if pkg_name.startswith("grimoire_") and target.startswith("tavern_"):
+        errors.append(
+            f"{origin}: Grimoire package '{pkg_name}' must not depend on or import '{target}'"
+        )
+    if pkg_name in PURE_DART_PACKAGES and target in {"flutter", "material_ui"}:
+        errors.append(
+            f"{origin}: pure-Dart package '{pkg_name}' must not depend on or import '{target}'"
+        )
+
+
+def check_import_direction(errors: list[str]) -> None:
+    for base in ("packages", "apps"):
+        base_dir = ROOT / base
+        if not base_dir.is_dir():
+            continue
+        for pkg_dir in sorted(base_dir.iterdir()):
+            if not pkg_dir.is_dir():
+                continue
+            pkg_name = pkg_dir.name
+            pubspec = pkg_dir / "pubspec.yaml"
+            if pubspec.is_file():
+                rel_pubspec = str(pubspec.relative_to(ROOT))
+                deps = extract_pubspec_dependencies(
+                    pubspec.read_text(encoding="utf-8")
+                )
+                for dep in sorted(deps):
+                    _check_forbidden_edge(
+                        base, pkg_name, dep, rel_pubspec, errors
+                    )
+
+            lib_dir = pkg_dir / "lib"
+            if not lib_dir.is_dir():
+                continue
+            for dart_file in sorted(lib_dir.rglob("*.dart")):
+                rel_dart = str(dart_file.relative_to(ROOT))
+                text = dart_file.read_text(encoding="utf-8")
+                for match in PACKAGE_IMPORT_RE.finditer(text):
+                    _check_forbidden_edge(
+                        base, pkg_name, match.group(1), rel_dart, errors
+                    )
 
 
 def check_dart_lib_urls(errors: list[str]) -> None:
@@ -132,6 +246,7 @@ def main() -> int:
     errors: list[str] = []
     check_markdown_files(errors)
     check_pubspecs(errors)
+    check_import_direction(errors)
     check_dart_lib_urls(errors)
     if errors:
         for err in errors:
