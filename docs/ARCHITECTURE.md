@@ -58,8 +58,8 @@ packages/realm_vault                    (pure Dart crypto, Tier 4)
 | `realm_ui` | Theme from `VenueBranding`, design-system widgets | `realm_core`, `material_ui` | Network, business logic |
 | `realm_l10n` | ARB files + `flutter gen-l10n` output | Flutter | Venue copy (comes from bootstrap) |
 | `realm_protocol` | Serverpod's generated client package: model classes + typed endpoint stubs (set `client_package_path` in the server's `generator.yaml`) | `realm_core`, `serverpod_client` | Hand-written code |
-| `realm_client` | Bootstrap fetch, session/auth storage, the configured `realm_protocol` client, base repository helpers | `realm_core`, `realm_protocol` | Widgets |
-| `feature_<name>` | One feature: `lib/src/ui/`, `lib/src/cubit/`, `lib/src/repositories/` | `realm_core`, `realm_ui`, `realm_l10n`, `realm_client` | Another `feature_*`, `realm_protocol` client calls outside `repositories/` |
+| `realm_client` | Bootstrap fetch, session/auth storage, the configured `realm_protocol` client, base repository helpers; re-exports `realm_protocol` model types so features need no direct dependency | `realm_core`, `realm_protocol` | Widgets |
+| `feature_<name>` | One feature: `lib/src/ui/`, `lib/src/cubit/`, `lib/src/repositories/` | `realm_core`, `realm_ui`, `realm_l10n`, `realm_client` | Another `feature_*`; endpoint calls outside `repositories/` |
 | `realm_vault` | AEAD envelope encryption, key ring, `keyHint` masking, all under `lib/src/crypto/` | `realm_core`, crypto lib | Serverpod, DB access |
 | `realm_a2ui` | Optional generative UI ([A2UI](A2UI.md)) | `realm_ui`, `a2ui_*` | Required by any core feature |
 
