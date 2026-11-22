@@ -3,6 +3,8 @@
 .packages
 build/
 coverage/
+.widget_preview/
+**/test/**/failures/
 **/generated_plugin_registrant.dart
 **/.flutter-plugins
 **/.flutter-plugins-dependencies

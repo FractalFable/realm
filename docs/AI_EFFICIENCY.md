@@ -35,4 +35,5 @@ The repository owner does not edit code manually. Unless blocked by a **Tier 4**
 3. Batch any needed doc updates via `doc-writer` (`Tier 1`).
 4. Run `code-reviewer` once the feature is complete and `./scripts/check.sh` passes.
 5. Fix any blocking `CRITICAL` / `HIGH` / `MEDIUM` review findings and re-verify (delta-only re-review) before reporting back.
-6. Only ask the user for confirmation on: **Tier 4** changes (payments, POS/fiscal, auth, security, production deploys), SSH/server mutations, destructive git/data actions, or behavioral prompt changes gated by [`docs/AGENT_IMPROVEMENT.md`](AGENT_IMPROVEMENT.md).
+6. **Open and merge the PR into `develop` autonomously** once checks and review pass, then report the merged PR URL — never ask "should I merge?" (see [`docs/GIT_WORKFLOW.md`](GIT_WORKFLOW.md) for the exact flow and no-auto-merge exceptions).
+7. Only ask the user for confirmation on: **Tier 4** changes (payments, POS/fiscal, auth, security, production deploys), SSH/server mutations, destructive git/data actions (force-push, history rewrites, merges into `staging`/`production`), or behavioral prompt changes gated by [`docs/AGENT_IMPROVEMENT.md`](AGENT_IMPROVEMENT.md).
