@@ -1,6 +1,6 @@
 # Realm
 
-An open-source, white-label pub and restaurant management platform built with **Dart** and **Flutter**.
+An open-source monorepo of white-label apps built with **Dart** and **Flutter** that share common building blocks. **Tavern** is the pub and restaurant management app; **Grimoire** is a note-taking app.
 
 Operators deploy Realm on their own infrastructure and customize branding, third-party integrations, and hosting with zero hardcoded venue logic or vendor lock-in.
 

@@ -1,6 +1,6 @@
 # Project Overview
 
-**Realm** is an open-source, completely brand-agnostic pub and restaurant management platform. Each operator/venue runs their own instance and retains full control over branding, integrations, and infrastructure.
+**Realm** is an open-source monorepo of completely brand-agnostic apps (**Tavern** for pub and restaurant management, **Grimoire** for note taking, more to follow) built on shared `realm_*` packages. Each operator runs their own instance and retains full control over branding, integrations, and infrastructure.
 
 ## Core Principles
 
