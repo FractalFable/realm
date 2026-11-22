@@ -1,18 +1,18 @@
 # Project Overview
 
-**Realm** is an open-source, self-hosted **Dart & Flutter** multi-app ecosystem and shared platform. Multiple independent or loosely connected applications live in this monorepo and share common configuration, UI building blocks, linting, AI/A2UI infrastructure, E2EE primitives, and a modular backend (`realm_server`).
+**Realm** is an open-source monorepo of completely brand-agnostic apps (**Tavern** for pub and restaurant management, **Grimoire** for E2EE interactive note taking, more to follow) built on shared, app-neutral `realm_*` packages. Each operator runs their own instance and retains full control over branding, integrations, and infrastructure.
 
 ## Applications in Realm
 
-- **Tavern** ([docs/apps/TAVERN.md](apps/TAVERN.md)) — Standalone, white-label pub and restaurant management platform (staff operations + guest ordering) powered by `realm_ui`, `realm_a2ui`, and the `tavern` server module.
-- **Grimoire** ([docs/apps/GRIMOIRE.md](apps/GRIMOIRE.md)) — Multi-platform (iOS, Android, macOS, Web), end-to-end encrypted interactive note-taking app featuring rich blocks, bi-directional note links, sandboxed web embeds, cross-platform runnable scripts, local-first hybrid RAG, and A2UI.
-- **Future Apps** — Additional apps added under `apps/<name>` share the same `packages/realm_*` building blocks without coupling product domains together.
+- **Tavern** ([docs/apps/TAVERN.md](apps/TAVERN.md)) — Standalone, white-label pub and restaurant management suite (`tavern_staff`, `tavern_guest`, `tavern_server`) powered by `realm_ui`, `realm_a2ui`, `realm_server_kit`, and `tavern_*` domain/protocol/feature packages.
+- **Grimoire** ([docs/apps/GRIMOIRE.md](apps/GRIMOIRE.md)) — Multi-platform (iOS, Android, macOS, Web), end-to-end encrypted interactive note-taking app (`grimoire`, `grimoire_server`) featuring rich blocks, bi-directional note links, sandboxed web embeds, cross-platform runnable scripts, local-first hybrid RAG, and A2UI.
+- **Future Apps** — Additional apps added under `apps/<name>` share the same app-neutral `packages/realm_*` building blocks without coupling product domains together.
 
 ## Scope-Based Package Naming
 
-- **`packages/realm_*`**: App-agnostic platform packages safe for any app to depend on (`realm_core`, `realm_ui`, `realm_lints`, `realm_a2ui`, `realm_crypto`, `realm_protocol`, `realm_client`, `realm_vault`).
-- **`packages/<app>_*`**: Product-specific domain or feature libraries (`tavern_core`, `grimoire_core`, `feature_*`).
-- **`apps/`**: Thin deployable client shells and the modular shared backend (`realm_server`, `tavern_staff`, `tavern_guest`, `grimoire`).
+- **`packages/realm_*`**: Strictly app-neutral platform packages safe for any app to depend on (`realm_core`, `realm_ui`, `realm_lints`, `realm_server_kit`, `realm_a2ui`, `realm_crypto`, `realm_protocol`, `realm_client`, `realm_auth`, `realm_vault`).
+- **`packages/<app>_*`**: Product-specific domain, protocol, or feature libraries (`tavern_core`, `tavern_protocol`, `tavern_<feature>`, `grimoire_core`).
+- **`apps/`**: Thin deployable client shells and per-app servers (`tavern_server`, `tavern_staff`, `tavern_guest`, `grimoire_server`, `grimoire`).
 
 ## Core Principles
 
@@ -29,6 +29,6 @@
 ## Implications for Agents & Contributors
 
 - Keep branding, copy, and visual assets configurable/overridable across all apps and packages.
-- Keep `packages/realm_*` strictly product-agnostic; put pub-specific logic in `tavern_*` and note-specific logic in `grimoire_*`.
+- Keep `packages/realm_*` strictly app-neutral; never import `tavern_*` or `grimoire_*` from `realm_*`, and put product-specific logic in `<app>_*`.
 - Externalize all third-party service credentials on the backend (`IntegrationKeyStatus` for UI status only), with safe gating (`AppCapabilities` / `VenueCapabilities`) when a key is omitted.
 - Avoid coupling deployment scripts, networking, or storage assumptions to a single proprietary host; keep infrastructure portable (standard containers, configurable URLs, and storage paths).
