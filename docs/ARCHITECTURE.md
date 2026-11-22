@@ -1,164 +1,209 @@
 # Architecture Decisions
 
-*Status: Proposed (2026-11-22). Ecosystem versions verified on that date.*
+*Status: Accepted direction, details Proposed (2026-11-22). Ecosystem versions verified on that date.*
 
-Realm is built and maintained mostly by AI agents, and few humans will read the code. Every decision here favors what makes agents reliable: **strict types, codegen over hand-written glue, small packages with one job, one obvious way to do each thing, fast deterministic tests, and a `CLAUDE.md` in every package.** When two options are equally good for humans, pick the one an agent is less likely to get wrong.
+Realm is built and maintained mostly by AI agents, and few humans will read the code. Every decision here favors what makes agents reliable: **strict types, codegen over hand-written glue, small packages with one job, one obvious way to do each thing, fast deterministic tests, and a `CLAUDE.md` in every package.** A second goal is **no framework lock-in**: every layer is plain Dart, plain SQL, or a standard container, so any piece can be swapped without a rewrite.
 
 Decisions already made elsewhere still hold: three-layer config and BYOK ([Config & Secrets](CONFIG_AND_SECRETS.md)), pub workspaces and `realm_lints` ([Monorepo](MONOREPO.md)), risk tiers ([Review Policy](REVIEW_POLICY.md)), A2UI isolation ([A2UI](A2UI.md)).
 
-**Read only the section your task needs.** §1 is the summary; §11 lists the choices that are the operator's call.
+**Read only the section your task needs.** §1 is the summary; §12 lists what is still open.
 
 ## 1. Decision Summary
 
 | # | Area | Decision | Rejected |
 | :--- | :--- | :--- | :--- |
-| D1 | Backend | **Serverpod 4.x** (Relic web server) in `apps/realm_server` | Dart Frog (no release since 2025-11), hand-rolled shelf/Relic |
-| D2 | Database | **PostgreSQL 16** via Serverpod ORM; migrations from `serverpod create-migration`, committed | drift_postgres (no stable 2.x), raw SQL |
-| D3 | Shared DTOs | **Serverpod `.spy.yaml` models** for app ↔ server; `realm_core` keeps hand-validated pre-session contracts | Duplicated client/server classes, OpenAPI |
-| D4 | State | **`flutter_bloc` Cubits** with sealed `freezed` states | Riverpod, `ChangeNotifier`, `get_it` |
-| D5 | Routing | **`go_router` + `go_router_builder`** typed routes | String paths, `auto_route` |
-| D6 | Codegen | `serverpod generate` + `build_runner` (`freezed`, `go_router_builder`, `json_serializable`), all behind `./scripts/gen.sh`; generated files committed | Hand-written `==`/`copyWith`/`fromJson`, macros (cancelled) |
-| D7 | Packages | Thin apps, one Flutter package per feature, strict dependency direction (§3) | Feature folders inside each app |
-| D8 | BYOK | Existing envelope-encryption design, isolated in `packages/realm_vault` | Secrets inside the ORM layer |
-| D9 | Theming | Existing `VenueBranding` → `realm_ui` theme; bootstrap cached for cold start | Per-venue builds |
-| D10 | Tests | Pure-Dart unit > Cubit > widget > server-with-Postgres > E2E smoke | Large E2E suites as the main proof |
-| D11 | Apps | `realm_server`, `realm_staff`, `realm_guest` (scope is the operator's call, §11) | One app per role |
+| D1 | Product scope | Two web apps (staff dashboard, guest ordering) plus one server; **web only, responsive** (phone, tablet, laptop); **online only**; **one venue per instance** | Store apps, offline ordering, multi-venue |
+| D2 | Hosting | **One cheap VPS**, Docker Compose: Caddy + `realm_server` + Postgres, one domain | Managed cloud services, Kubernetes, Redis |
+| D3 | Backend | **`shelf` + `shelf_router`** in `apps/realm_server`, typed endpoints from `realm_protocol` | Serverpod (locks models, ORM, client, and auth to one framework), Dart Frog (no release since 2025-11) |
+| D4 | Database | **PostgreSQL 16** via `package:postgres` 3.x with plain SQL; numbered SQL migrations applied by the server at startup | SQLite (runner-up), drift (no stable Postgres 2.x), ORMs |
+| D5 | Shared DTOs | **`packages/realm_protocol`**: `freezed` + `json_serializable` DTOs and typed endpoint descriptors, used by server and apps | Duplicated client/server classes, OpenAPI |
+| D6 | State | **`flutter_bloc` Cubits** with sealed `freezed` states | Riverpod, `ChangeNotifier`, `get_it` |
+| D7 | Routing | **`go_router` + `go_router_builder`** typed routes | String paths, `auto_route` |
+| D8 | Live updates | One **WebSocket** per staff client; the client refetches on reconnect | Polling, a message broker |
+| D9 | Codegen | `build_runner` (`freezed`, `json_serializable`, `go_router_builder`) behind `./scripts/gen.sh`; generated files committed | Hand-written `==`/`copyWith`/`fromJson`, macros (cancelled) |
+| D10 | Packages | Thin apps, one Flutter package per feature, strict import direction (§4) | Feature folders inside each app |
+| D11 | BYOK | Existing envelope-encryption design, isolated in `packages/realm_vault` | Secrets mixed into query code |
+| D12 | Tests | Pure-Dart unit > Cubit > widget > server-with-Postgres > E2E smoke | Large E2E suites as the main proof |
 
-## 2. Backend: Serverpod (D1)
+## 2. Product Scope and Hosting (D1, D2)
 
-**Why it fits agents**: one YAML model file produces the server class, the DB table, the migration, and the typed Flutter client. Endpoints are plain Dart methods, and calling them from an app is a typed method call, so there is no URL, JSON, or status-code glue for an agent to get wrong. Serverpod 4 makes pub workspaces the default and runs on Relic, so custom HTTP routes sit next to RPC endpoints.
+**Apps** (Flutter web, responsive from phone to laptop):
 
-Rules:
-- **RPC endpoints** (`lib/src/<module>/<module>_endpoint.dart`) for everything an app calls.
-- **Plain HTTP routes** only for three things: `GET /api/v1/bootstrap` (public, pre-session, must stay a stable REST path), provider webhooks (raw body needed for signature checks), and health checks.
-- **Module layout** inside the server: `lib/src/<module>/` holding `endpoints/` (thin: auth check, then call a service), `services/` (logic, unit-testable), and `models/*.spy.yaml`. Modules: `bootstrap`, `auth`, `venue`, `menu`, `orders`, `integrations`, `ai`, later `payments` and `fiscal` (Tier 4 paths).
-- **No Redis** by default; Serverpod runs without it, which keeps a self-hosted instance at one container plus Postgres.
-- **Verify before scaffolding**: confirm webhook raw-body access and the Docker image in the Serverpod 4 docs. If either is missing, keep Serverpod for RPC and add a small Relic router for those routes; do not switch frameworks.
+| App | Users | First screens |
+| :--- | :--- | :--- |
+| `apps/realm_staff` | Workers and the manager | Live order board, order status changes, menu editing, settings (branding, BYOK keys; manager only) |
+| `apps/realm_guest` | Guests at the venue | Menu, cart, place order, order status |
+| `apps/realm_server` | — | API, WebSocket, migrations, BYOK proxy |
 
-## 3. Packages and Dependency Direction (D7)
+- **Web only.** No App Store or Play Store builds for now. Do not add `dart:io`-only code to apps or UI packages; everything must compile for web. Layouts use breakpoints from `realm_ui` (compact < 600, medium < 1024, expanded >= 1024 logical pixels).
+- **Online only.** No local database, no sync queue. If the connection drops, show a clear offline banner and disable ordering until it returns.
+- **One venue per instance.** One small business runs one copy. There is one `venue` row; other tables do not carry tenant columns. The BYOK AAD still binds that venue's id, as [Config & Secrets](CONFIG_AND_SECRETS.md) §3 requires. `HostingMode` stays `selfHosted` by default.
+
+**Hosting**: one VPS (about 2 GB RAM is enough to start) running `compose.yaml` with three containers:
+
+| Container | Role |
+| :--- | :--- |
+| `caddy` | Automatic HTTPS for the operator's domain; serves the guest web build at `/` and the staff build at `/staff/`; proxies `/api/` and `/ws` to the server |
+| `realm_server` | AOT-compiled Dart server (`dart compile exe`), stateless |
+| `postgres` | Postgres 16 with a named volume; a daily `pg_dump` to a backup volume |
+
+Everything runs on one origin, so apps use the same-origin fallback in `ClientEndpointConfig` and need no `config.json`. The operator supplies only a domain and the secrets in [Config & Secrets](CONFIG_AND_SECRETS.md) §3.
+
+## 3. Backend: shelf with Typed Endpoints (D3, D5)
+
+**Why shelf**: it is the Dart team's standard HTTP interface (1.4.3, released 2026-10), it is small, and agents know it well. Handlers are thin, so moving to another server library later only touches `lib/src/http/`.
+
+**Typed endpoints, defined once.** Each endpoint is a constant in `realm_protocol`:
+
+```dart
+const placeOrder = Endpoint<PlaceOrderRequest, OrderDto>.post(
+  '/api/v1/orders',
+  request: PlaceOrderRequest.fromJson,
+  response: OrderDto.fromJson,
+);
+```
+
+- The server registers it with `api.handle(placeOrder, (ctx, req) => ordersService.place(ctx, req))`. The helper decodes, validates, checks auth, encodes, and maps errors.
+- Apps call it with `api.call(placeOrder, req)` and get a typed `Result<OrderDto, ApiError>`.
+- A changed DTO or path is a compile error on both sides. No agent writes URLs, JSON keys, or status codes by hand.
+- Errors are one `ApiError` DTO with an `ApiErrorCode` enum. Expected failures never throw across the wire.
+
+**Module layout** inside the server, `lib/src/<module>/`:
+- `endpoints/`: registers the module's endpoints and stays thin (auth check, then call a service).
+- `services/`: logic, unit-testable with fake repositories.
+- `repositories/`: plain SQL through `package:postgres`, mapping rows to DTOs.
+
+Modules: `bootstrap`, `auth`, `venue`, `menu`, `orders`, `live` (WebSocket), `integrations`, `ai`, later `payments` (Tier 4).
+
+`GET /api/v1/bootstrap` keeps its existing path and `realm_core` contract. Provider webhooks get raw-body routes so signatures can be checked.
+
+**Live updates (D8)**: staff clients open `/ws` after sign-in. After an order transaction commits, the `orders` service publishes a typed `LiveEvent` (from `realm_protocol`) to connected clients. Events are hints; after any reconnect the client refetches the current state, so a missed event can never leave the board wrong. Guests get status updates the same way, scoped to their own order.
+
+## 4. Packages and Dependency Direction (D10)
 
 ```
-apps/realm_staff, apps/realm_guest      (thin shells: routes, DI wiring, flavors)
+apps/realm_staff, apps/realm_guest      (thin shells: routes, DI wiring)
         │
 packages/feature_<name>                 (screens + cubits + repositories for one feature)
         │
 packages/realm_ui   packages/realm_client   packages/realm_l10n
         │                  │
-        │           packages/realm_protocol (generated by serverpod generate, never edited)
+        │           packages/realm_protocol (DTOs + endpoint descriptors, pure Dart)
         │                  │
 packages/realm_core  ◄─────┘            (pure Dart, no Flutter, no IO)
 
-apps/realm_server ──► realm_core, realm_vault   (owns the .spy.yaml sources)
+apps/realm_server ──► realm_protocol, realm_core, realm_vault
 packages/realm_vault                    (pure Dart crypto, Tier 4)
 ```
 
 | Package | Contains | May depend on | Never |
 | :--- | :--- | :--- | :--- |
 | `realm_core` | Value types, validation, money as integer minor units, `ClientEndpointConfig`, `VenueBootstrap` | `meta` | Flutter, IO, HTTP |
-| `realm_ui` | Theme from `VenueBranding`, design-system widgets | `realm_core`, `material_ui` | Network, business logic |
-| `realm_l10n` | ARB files + `flutter gen-l10n` output | Flutter | Venue copy (comes from bootstrap) |
-| `realm_protocol` | Serverpod's generated client package: model classes + typed endpoint stubs (set `client_package_path` in the server's `generator.yaml`) | `realm_core`, `serverpod_client` | Hand-written code |
-| `realm_client` | Bootstrap fetch, session/auth storage, the configured `realm_protocol` client, base repository helpers; re-exports `realm_protocol` model types so features need no direct dependency | `realm_core`, `realm_protocol` | Widgets |
-| `feature_<name>` | One feature: `lib/src/ui/`, `lib/src/cubit/`, `lib/src/repositories/` | `realm_core`, `realm_ui`, `realm_l10n`, `realm_client` | Another `feature_*`; endpoint calls outside `repositories/` |
-| `realm_vault` | AEAD envelope encryption, key ring, `keyHint` masking, all under `lib/src/crypto/` | `realm_core`, crypto lib | Serverpod, DB access |
+| `realm_protocol` | `freezed` DTOs, `Endpoint` descriptors, `ApiError`, `LiveEvent` | `realm_core`, `freezed_annotation`, `json_annotation` | Flutter, HTTP clients, `dart:io` |
+| `realm_ui` | Theme from `VenueBranding`, breakpoints, design-system widgets | `realm_core`, `material_ui` | Network, business logic |
+| `realm_l10n` | ARB files + `flutter gen-l10n` output | Flutter | Venue copy (comes from the server) |
+| `realm_client` | HTTP + WebSocket client for `Endpoint`s, bootstrap fetch, session storage | `realm_core`, `realm_protocol` | Widgets |
+| `feature_<name>` | One feature: `lib/src/ui/`, `lib/src/cubit/`, `lib/src/repositories/` | `realm_core`, `realm_protocol`, `realm_ui`, `realm_l10n`, `realm_client` | Another `feature_*`; `api.call` outside `repositories/` |
+| `realm_vault` | AEAD envelope encryption, key ring, `keyHint` masking, all under `lib/src/crypto/` | `realm_core`, crypto lib | DB access, HTTP |
 | `realm_a2ui` | Optional generative UI ([A2UI](A2UI.md)) | `realm_ui`, `a2ui_*` | Required by any core feature |
 
 Every package also takes `realm_lints` as a dev dependency and references siblings by version constraint, as [Monorepo](MONOREPO.md) requires.
 
-**Directory names are load-bearing**: `cubit/`, `repositories/`, `services/`, and `crypto/` match the path globs in [Review Policy](REVIEW_POLICY.md), so the right tier applies automatically (`cubit/`, `repositories/`, `services/` are Tier 3; `crypto/`, `auth/`, `migrations/`, `payment*/`, `fiscal*/` are Tier 4). Do not rename them.
+**Directory names are load-bearing**: `cubit/`, `repositories/`, `services/`, `crypto/`, `auth/`, and `migrations/` match the path globs in [Review Policy](REVIEW_POLICY.md), so the right tier applies automatically (`cubit/`, `repositories/`, `services/` are Tier 3; `crypto/`, `auth/`, `migrations/`, `payment*/` are Tier 4). Do not rename them.
 
 Rules:
-- **Features never import each other.** Cross-feature navigation goes through typed routes owned by the app; shared data goes down into `realm_client` or `realm_core`.
-- **Apps hold no business logic.** An app is routes, provider wiring, flavor config, and `main.dart`.
+- **Features never import each other.** Cross-feature navigation goes through typed routes owned by the app; shared data goes down into `realm_client`, `realm_protocol`, or `realm_core`.
+- **Apps hold no business logic.** An app is routes, provider wiring, and `main.dart`.
 - **Small packages**: split a feature package once it passes about 3,000 lines of non-generated code.
-- **Enforce, don't trust**: extend `scripts/check_hygiene.py` to fail on a forbidden import edge (follow-up work, see §12).
+- **Enforce, don't trust**: extend `scripts/check_hygiene.py` to fail on a forbidden import edge (follow-up work, see §13).
 
-## 4. Database and Migrations (D2)
+## 5. Database and Migrations (D4)
 
-- PostgreSQL 16 is the only supported database. Tables come from `table:` in `.spy.yaml` models; do not hand-write DDL.
-- After changing a model: `./scripts/gen.sh`, then `serverpod create-migration --tag <slug>`, then commit the migration directory. Migration directories are Tier 4.
-- **Deploys roll forward; every migration still needs a rollback plan** ([Review Policy](REVIEW_POLICY.md) requires reversible migrations). Make changes additive (expand, then contract): a destructive change (drop or rename a column) ships in two releases, first stop reading the column, then drop it, so the previous server version keeps working against the new schema. State in the PR how to roll back (previous release + untouched schema, or a pre-deploy `pg_dump` restore). The server test run (§9) applies every migration to a fresh database.
-- Money columns are integer minor units (`int`) plus an ISO 4217 currency code. Never `double`.
-- Every tenant-owned table carries `venueId`, even though one instance usually serves one operator (see §11 on tenancy).
+**Postgres, with SQLite as the runner-up.** SQLite would make backups a file copy, but Postgres handles many guests ordering at once without write locking, gives proper types (`timestamptz`, `numeric`, `jsonb`), and is what the existing BYOK storage design targets. On a 2 GB VPS it costs nothing extra. Plain SQL keeps the database replaceable: no ORM or schema DSL ties the code to a library.
 
-## 5. Shared DTOs (D3)
+- **Queries**: `package:postgres` 3.x with named parameters only (`Sql.named('... WHERE id = @id')`), never string interpolation. All SQL lives in server `repositories/`.
+- **Migrations**: `apps/realm_server/migrations/NNNN_<slug>.sql`, one file per change, never edited after merge. The server applies pending files at startup, each in a transaction under a Postgres advisory lock, and records them in `schema_migrations`. Migration files are Tier 4.
+- **Deploys roll forward; every migration still needs a rollback plan** ([Review Policy](REVIEW_POLICY.md) requires reversible migrations). Make changes additive (expand, then contract): a destructive change (drop or rename a column) ships in two releases, first stop reading the column, then drop it, so the previous server version keeps working against the new schema. State in the PR how to roll back (previous release + untouched schema, or the latest `pg_dump` restore).
+- **Schema check**: the server test run (§10) applies every migration to an empty database and compares the result with a committed `schema.sql` dump, so drift is caught deterministically.
+- Money columns are `bigint` minor units plus an ISO 4217 currency code. Never floating point.
 
-**One rule**: if an authenticated app sends or receives it, it is a Serverpod model. Agents never write a class twice, and a field change shows up as a compile error on both sides.
+## 6. Shared DTOs (D5)
 
-- `realm_core` keeps the hand-validated contracts that exist before a session: `ClientEndpointConfig`, `VenueBootstrap`, `VenueBranding`, `VenueCapabilities`, `IntegrationKeyStatus`. They are small, security-relevant, and already tested. Serve them through Serverpod's custom-class support or the plain bootstrap route; do not duplicate them as `.spy.yaml`.
-- Validation of user input lives in `realm_core` functions, called by both the Cubit (fast feedback) and the endpoint (authority). The server is always the authority.
-- Changing any shared model is at least Tier 3 ([Review Policy](REVIEW_POLICY.md) rule 1).
+**One rule**: if it crosses the wire, it is defined once in `realm_protocol`. Agents never write a class twice.
 
-## 6. App State and Routing (D4, D5)
+- New DTOs are `@freezed` classes with `json_serializable`; enums use `@JsonEnum(alwaysCreate: true)`; unknown enum values fail decoding.
+- `realm_core` keeps the existing hand-validated contracts (`ClientEndpointConfig`, `VenueBootstrap`, `VenueBranding`, `VenueCapabilities`, `IntegrationKeyStatus`). They are small, security-relevant, and already tested; `realm_protocol` reuses them rather than duplicating them.
+- Input validation lives in `realm_core` functions, called by the Cubit (fast feedback) and the server endpoint (authority). The server is always the authority.
+- Changing any shared DTO is at least Tier 3 ([Review Policy](REVIEW_POLICY.md) rule 1).
 
-**State: `flutter_bloc` Cubits.** Chosen over Riverpod because the pattern is small and explicit (call a method, emit a state), it has changed little across versions so agent output does not mix API generations, and `bloc_test` gives fast deterministic tests. The repository's review tiers already route `**/cubit/**` to Tier 3.
+## 7. App State and Routing (D6, D7)
+
+**State: `flutter_bloc` Cubits, not Riverpod.** Both work. Cubits win for agents because the pattern is small and explicit (call a method, emit a state), the API has barely changed between versions so agent output does not mix generations, and `bloc_test` gives fast deterministic tests. Riverpod 3 changed its API substantially from 2.x, which makes agent-written code more likely to use the wrong version. Do not mix the two.
 - One Cubit per screen or flow, in `feature_<name>/lib/src/cubit/`. Use a `Bloc` only when you need event transforms such as debounce.
 - States are sealed `freezed` unions (`initial | loading | ready | failure`). Never use nullable flags such as `isLoading` plus `error`.
-- Cubits talk to repositories only, never to `realm_protocol` directly. Repositories return typed results; they do not throw for expected failures.
+- Cubits talk to repositories only. Repositories return typed results; they do not throw for expected failures.
 - Dependency injection uses `RepositoryProvider`/`BlocProvider` wired in the app. No service locator.
 - Risk to watch: `flutter_bloc` 9.1.1 (2025-05) is the latest release. That is stable, not abandoned, but recheck before 2027.
 
-**Routing: `go_router` with `go_router_builder`.** Routes are generated typed classes (`const MenuRoute(tableId: 'x').go(context)`), so a renamed parameter is a compile error. The guest app needs real URLs for QR-code deep links, which `go_router` handles on web. Each app owns its route tree; features expose screens, not routes.
+**Routing: `go_router` with `go_router_builder`.** Routes are generated typed classes (`const MenuRoute(tableId: 'x').go(context)`), so a renamed parameter is a compile error. Real URLs matter on web: guests arrive from a table QR code link, and browser back/forward and refresh must work. Each app owns its route tree; features expose screens, not routes. The staff app is built with `--base-href /staff/`.
 
-## 7. BYOK Secrets and Bootstrap (D8)
+## 8. BYOK Secrets and Bootstrap (D11)
 
 Storage, precedence, rotation, and RBAC are already decided in [Config & Secrets](CONFIG_AND_SECRETS.md) §3. This section only places them:
-- `packages/realm_vault` does encryption and key-ring logic as pure functions, with test vectors and AAD-swap tests. It has no DB or framework code, so a Tier 4 review covers one small package.
+- `packages/realm_vault` does encryption and key-ring logic as pure functions, with test vectors and AAD-swap tests. It has no DB or HTTP code, so a Tier 4 review covers one small package.
 - The server `integrations` module stores `realm_vault` output in one `integration_credentials` table, resolves file → env → vault precedence, and is the only code that decrypts.
 - The `ai` module proxies all LLM calls behind a provider-neutral `LlmProvider` interface. Clients never see keys, only `VenueCapabilities.aiAssistantEnabled`.
 - `GET /api/v1/bootstrap` is computed per request from config plus which keys resolve. It is public and cacheable for a short time, and it never includes `IntegrationKeyStatus`.
 - AEAD library: `package:cryptography` (AES-GCM and XChaCha20-Poly1305 in pure Dart). Its last release is about a year old, so the `security-auditor` agent re-checks it before `realm_vault` lands.
 
-## 8. Branding and Theming (D9)
+## 9. Branding and Theming
 
 - Startup order: resolve `ClientEndpointConfig` → fetch bootstrap → build `RealmTheme` from `VenueBranding` → first real frame. Show a neutral, unbranded splash until the bootstrap arrives.
-- Cache the last good bootstrap locally and use it on the next cold start, then refresh in the background. Branding changes show up on the next launch without a rebuild.
-- UI strings come from `realm_l10n`. Venue-specific copy (name, tagline, later menu text) comes only from the server.
+- Cache the last good bootstrap in browser storage and use it on the next load, then refresh in the background.
+- UI strings come from `realm_l10n`. Venue-specific copy (name, tagline, menu text) comes only from the server.
 
-## 9. Testing Strategy (D10)
+## 10. Testing Strategy (D12)
 
-Fast and deterministic first. Each layer names its command; `./scripts/check.sh` runs every one that is configured.
+Fast and deterministic first. `./scripts/check.sh` runs every layer that is configured.
 
 | Layer | Where | Tool | Rule |
 | :--- | :--- | :--- | :--- |
-| Unit | `realm_core`, `realm_vault`, server `services/` | `dart test` | No IO, no clock (inject `Clock`), no randomness without a seed |
+| Unit | `realm_core`, `realm_protocol`, `realm_vault`, server `services/` | `dart test` | No IO, no clock (inject `Clock`), no randomness without a seed |
 | Cubit | `feature_*/test/cubit/` | `bloc_test` + fake repositories | One test per state transition, failure paths included |
-| Widget | `realm_ui`, `feature_*/test/ui/` | `flutter_test` | Light + dark, `>= 2` `VenueBranding` seeds ([Testing](TESTING_AND_DEBUGGING.md) §2) |
-| Server | `apps/realm_server/test/` | Serverpod test tools against Postgres | Fresh schema per run, migrations applied |
-| E2E smoke | `apps/*/integration_test/` | `integration_test` | A few critical flows only (order placement, login) |
+| Widget | `realm_ui`, `feature_*/test/ui/` | `flutter_test` | Light + dark, `>= 2` `VenueBranding` seeds, compact and expanded widths |
+| Server | `apps/realm_server/test/` | `dart test` against a real Postgres | Fresh database per run, all migrations applied, schema check (§5) |
+| E2E smoke | `apps/*/integration_test/` | `integration_test` on Chrome | A few critical flows only (guest places order, staff sees it) |
 
 - Every widget and screen also meets the testability and a11y contract in [Testing](TESTING_AND_DEBUGGING.md) §2 (`ValueKey`, `Semantics`, guideline assertions); every new app follows the checklist in §5 there.
 - Fakes over mocks: each repository has a hand-written `Fake<Name>Repository` next to the interface, so tests read like the real code.
-- Server tests need Postgres: a service container in CI, and a local or containerized Postgres in agent sessions. Until that exists, keep server logic in `services/` so the unit layer covers it.
+- Server tests need Postgres: a service container in CI, and a local Postgres in agent sessions. Until that exists, keep logic in `services/` so the unit layer covers it.
 - CI fails if `./scripts/gen.sh` changes any file (stale generated code).
 
-## 10. Agent Conventions
+## 11. Agent Conventions
 
 **Per-package `CLAUDE.md`** (contains `@AGENTS.md`) plus an `AGENTS.md` of at most about 25 lines with these headings: *Purpose* (one line), *Allowed deps*, *Public API* (exported file), *Commands* (test, gen), *Invariants*, *Tier*. [`packages/realm_ui/AGENTS.md`](../packages/realm_ui/AGENTS.md) is the model.
 
 **Golden paths** (the one way):
-- *New feature*: create `packages/feature_<name>` with `lib/src/ui/`, `lib/src/cubit/`, `lib/src/repositories/`, and `AGENTS.md` → add models to the server → `./scripts/gen.sh` → repository + fake → Cubit + tests → screen with `ValueKey`/`Semantics` + widget test with a11y guidelines ([Testing](TESTING_AND_DEBUGGING.md) §2) → typed route in the app.
-- *New endpoint*: `.spy.yaml` model → `endpoints/<name>_endpoint.dart` (thin) → `services/<name>_service.dart` + unit tests → `./scripts/gen.sh` → server test.
+- *New feature*: create `packages/feature_<name>` with `lib/src/ui/`, `lib/src/cubit/`, `lib/src/repositories/`, and `AGENTS.md` → DTOs and `Endpoint`s in `realm_protocol` → `./scripts/gen.sh` → server endpoint + service + repository → app repository + fake → Cubit + tests → screen with `ValueKey`/`Semantics` + widget test with a11y guidelines ([Testing](TESTING_AND_DEBUGGING.md) §2) → typed route in the app.
+- *New endpoint*: DTOs + `Endpoint` constant in `realm_protocol` → `./scripts/gen.sh` → `endpoints/` registration (thin) → `services/` logic + unit tests → `repositories/` SQL → server test.
+- *Schema change*: new `migrations/NNNN_<slug>.sql` (additive) → update `schema.sql` → repository SQL → server test → rollback plan in the PR (Tier 4).
 - *New BYOK provider*: add to `IntegrationProvider` → adapter in the server `integrations` module → capability flag computed in `bootstrap` → Tier 4 review.
 
-**Never**: hand-edit generated files (`*.g.dart`, `*.freezed.dart`, `lib/src/generated/`), add a second state or DI library, call HTTP directly from a feature, or put a secret in a client package.
+**Never**: hand-edit generated files (`*.g.dart`, `*.freezed.dart`), add a second state or DI library, build SQL with string interpolation, call HTTP directly from a feature, or put a secret in a client package.
 
-## 11. Operator Decisions Needed
+## 12. Still Open
 
-These change the product or the running cost, so they are not decided here. Defaults in *italics* are what agents assume until the operator answers.
+Decided by the operator on 2026-11-22: staff and guest apps first, web only and responsive, no offline ordering, one venue per instance, one cheap VPS. Still open, with the default agents assume until answered:
 
-1. **App scope and order.** Which apps ship first, and is the kitchen display a separate app or a mode of staff? *Default: `realm_staff` (waiters, kitchen, and manager/admin as role-gated sections) and `realm_guest` (menu and table ordering, web first), built after the server.*
-2. **Target platforms.** Staff on tablets (iPadOS/Android), desktop, or web? Guest as web only or also store apps? *Default: staff on Android tablet + web, guest on web.*
-3. **Offline operation.** Must staff keep taking orders when the venue's internet drops? This is the largest architectural fork: it adds a local database and a sync protocol. *Default: online-only first; Serverpod 4's client-side SQLite is the path if offline is needed.*
-4. **Tenancy and the `managed` hosting mode.** One instance per operator, or also a hosted multi-tenant service? *Default: one instance per operator, with `venueId` columns so several venues of one operator fit.*
-5. **Hosting baseline.** Minimum target for self-hosters. *Default: one small VPS running Docker Compose with the server and Postgres, no Redis.*
-6. **Staff sign-in.** Email/password, passkeys, a shared-tablet PIN, or a mix? *Default: email + passkey for managers, PIN on paired tablets (Tier 4 design pass needed).*
-7. **First BYOK providers.** Which LLM, payment, and fiscal providers come first? Fiscal rules depend on the operator's country.
+1. **Staff sign-in.** *Default: the manager signs in with email + password; workers use a short PIN on a device the manager has approved. Needs a Tier 4 design pass.*
+2. **Guest payment.** *Default: guests order without paying online and pay at the counter or table; online payment comes later through a BYOK payment provider.*
+3. **How guests reach the menu.** *Default: a QR code per table linking to `/t/<table-code>`, so orders arrive tagged with the table.*
+4. **First BYOK providers and languages.** Which LLM, payment, and fiscal providers come first, and which UI languages ship first? Fiscal rules depend on the operator's country.
 
-## 12. Follow-Up Work
+## 13. Follow-Up Work
 
-1. Scaffold `apps/realm_server` (Serverpod 4, client generated into `packages/realm_protocol`) with the bootstrap route and a server test, and uncomment `- apps/*` in the root `pubspec.yaml`.
-2. Add `./scripts/gen.sh` and the CI generated-code drift check.
-3. Add the import-direction check to `scripts/check_hygiene.py`.
-4. Add `realm_client`, then the first `feature_*` package following §10.
+1. Scaffold `packages/realm_protocol` with the `Endpoint` type, `ApiError`, and `./scripts/gen.sh`, plus the CI generated-code drift check.
+2. Scaffold `apps/realm_server` (shelf, migrator, bootstrap endpoint, server test against Postgres), `compose.yaml`, and the Caddyfile. Uncomment `- apps/*` in the root `pubspec.yaml`.
+3. Add `realm_client`, then the first `feature_*` package (guest menu) following §11.
+4. Add the import-direction check to `scripts/check_hygiene.py`.
 5. Scaffold `realm_vault` (Tier 4, after a `security-auditor` dependency check).
