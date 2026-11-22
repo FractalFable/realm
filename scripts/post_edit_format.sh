@@ -2,14 +2,17 @@
 set -uo pipefail
 
 # Antigravity PostToolUse hook: silently auto-format edited/written .dart files.
-# Always emits `{}` on stdout and exits 0.
+# Fast-exits in pure bash without spawning python3 when no .dart file is in payload.
 
 payload="$(cat 2>/dev/null || true)"
 
-target_file=""
-if [[ -n "$payload" ]]; then
-  target_file="$(
-    python3 -c '
+if [[ "$payload" != *".dart"* ]]; then
+  printf '{}\n'
+  exit 0
+fi
+
+target_file="$(
+  python3 -c '
 import json, sys
 try:
     data = json.loads(sys.stdin.read())
@@ -24,8 +27,7 @@ for key in ("Path", "TargetFile", "path"):
         print(val)
         break
 ' <<< "$payload" 2>/dev/null || true
-  )"
-fi
+)"
 
 if [[ -n "$target_file" && -f "$target_file" ]]; then
   dart format "$target_file" >/dev/null 2>&1 || true
