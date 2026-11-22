@@ -43,11 +43,11 @@ Decisions already made elsewhere still hold: three-layer config and BYOK ([Confi
 
 | Container | Role |
 | :--- | :--- |
-| `caddy` | Automatic HTTPS for the operator's domain; serves the guest web build at `/` and the staff build at `/staff/`; proxies `/api/` and `/ws` to the server |
+| `caddy` | Automatic HTTPS for the operator's domain; serves the guest web build at `/` and the staff build at `/staff/`; proxies `/api/` (REST and the `/api/v1/ws` WebSocket) to the server |
 | `realm_server` | AOT-compiled Dart server (`dart compile exe`), stateless |
 | `postgres` | Postgres 16 with a named volume; a daily `pg_dump` to a backup volume |
 
-Caddy must fall back to each app's `index.html` for unknown paths under its prefix (`/staff/*` for staff, everything else outside `/api/` and `/ws` for guest), so QR deep links such as `/t/<table-code>` and browser refresh work.
+Caddy must fall back to each app's `index.html` for unknown paths under its prefix (`/staff/*` for staff, everything else outside `/api/` for guest), so QR deep links such as `/t/<table-code>` and browser refresh work.
 
 Everything runs on one origin, so apps use the same-origin fallback in `ClientEndpointConfig` and need no `config.json`. The operator supplies only a domain and the secrets in [Config & Secrets](CONFIG_AND_SECRETS.md) §3.
 
@@ -81,7 +81,7 @@ Modules: `bootstrap`, `auth`, `venue`, `menu`, `orders`, `live` (WebSocket), `in
 
 `GET /api/v1/bootstrap` keeps its existing path and `realm_core` contract. Provider webhooks get raw-body routes so signatures can be checked.
 
-**Live updates (D8)**: staff clients open `/ws` after sign-in. After an order transaction commits, the `orders` service publishes a typed `LiveEvent` (from `realm_protocol`) to connected clients. Events are hints; after any reconnect the client refetches the current state, so a missed event can never leave the board wrong. Guests get status updates the same way, scoped to their own order: placing an order returns an unguessable order token (at least 128 random bits), and the guest app uses it both to read that order's status and to open its WebSocket. The token grants nothing else.
+**Live updates (D8)**: staff clients open `/api/v1/ws` after sign-in; the session cookie (`Path=/api/`) rides on the upgrade request, and the server rejects any upgrade whose `Origin` is not the instance's own origin. After an order transaction commits, the `orders` service publishes a typed `LiveEvent` (from `realm_protocol`) to connected clients. Events are hints; after any reconnect the client refetches the current state, so a missed event can never leave the board wrong. Guests get status updates the same way, scoped to their own order: placing an order returns an unguessable order token (at least 128 random bits), and the guest app uses it both to read that order's status (in an `Authorization` header) and to open its WebSocket (sent as the first WS message). Never put the token in a URL, so it stays out of Caddy and server logs. The token grants nothing else.
 
 **Public endpoints** (bootstrap, menu, place order, guest order status) are rate-limited per IP in the server, and place-order also validates prices and availability server-side; the client total is never trusted.
 
