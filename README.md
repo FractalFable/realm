@@ -45,6 +45,7 @@ This repository uses **Dart Pub Workspaces** (`sdk: ^3.14.0`, Flutter `>=3.50.0`
 ## Documentation
 
 - [Project Overview](docs/PROJECT_OVERVIEW.md) — Open-source goals and strict brand-agnostic rules.
+- [Architecture Decisions](docs/ARCHITECTURE.md) — Backend, database, state, routing, package boundaries, testing, and open operator decisions.
 - [Config, Branding & BYOK Secrets](docs/CONFIG_AND_SECRETS.md) — Endpoint resolution, `/api/v1/bootstrap`, and server-only BYOK secret storage.
 - [Monorepo & Linting](docs/MONOREPO.md) — Dart Pub Workspace setup and shared `realm_lints` rules.
 - [A2UI Architecture Note](docs/A2UI.md) — Declarative generative UI (`a2ui_flutter` / `a2ui_core`) evaluation.
