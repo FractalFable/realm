@@ -9,7 +9,9 @@ This repository targets **Claude Code**. Everything agent-related is committed, 
 | [`CLAUDE.md`](../CLAUDE.md) | Imports `@AGENTS.md`; holds `## Learned Constraints` from self-improvement runs |
 | [`packages/realm_ui/CLAUDE.md`](../packages/realm_ui/CLAUDE.md) | Imports the package's scoped `AGENTS.md` (Claude Code loads nested `CLAUDE.md`, not nested `AGENTS.md`). Add one per new `apps/<app>/` too |
 | [`.claude/agents/`](../.claude/agents/) | `critic`, `doc-writer`, `web-researcher`, `security-auditor`, `agent-improver` (each pins its `model`) |
-| [`.claude/settings.json`](../.claude/settings.json) | Dart auto-format hook, safe command allowlist, `.env` read deny, `CLAUDE_CODE_SUBAGENT_MODEL` default |
+| [`.claude/hooks/session-start.sh`](../.claude/hooks/session-start.sh) | Cloud-only SessionStart hook: installs the pinned Flutter SDK, links `flutter`/`dart` into `/usr/local/bin`, runs `flutter pub get` when manifests change |
+| [`.flutter-version`](../.flutter-version) | Single Flutter pin shared by CI and the cloud hook (bump `FLUTTER_SHA256` in the hook with it) |
+| [`.claude/settings.json`](../.claude/settings.json) | Dart auto-format hook, SessionStart hook, safe command allowlist, `.env` read deny, `CLAUDE_CODE_SUBAGENT_MODEL` default |
 | [`.mcp.json`](../.mcp.json) | `dart` MCP server (`dart mcp-server --enable flutter_app_lifecycle`); Claude Code asks once to approve it |
 | [`.github/workflows/check.yml`](../.github/workflows/check.yml) | CI running `./scripts/check.sh --quiet`; the required check for auto-merge |
 
@@ -18,7 +20,7 @@ Personal overrides go in `.claude/settings.local.json` (gitignored).
 ## Requirements
 
 - **Dart 3.14+ / Flutter 3.50+** on `PATH`. The format hook and the `dart` MCP server silently do nothing without it.
-- **Claude Code cloud sessions** start without Flutter. Add an environment setup script that installs Flutter (stable) and runs `flutter pub get`, or `check.sh` cannot run there.
+- **Claude Code cloud sessions** get Flutter from the SessionStart hook (about 2 minutes the first time, instant once the container is cached). For the `dart` MCP server to start on a brand-new container too, set the environment's setup script to `CLAUDE_CODE_REMOTE=true bash .claude/hooks/session-start.sh`.
 - **Skills (optional)**: Put shared Flutter/Dart `SKILL.md` files in `.claude/skills/` so every session and contributor gets them.
 
 ## Opt-In MCPs
