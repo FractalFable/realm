@@ -1,0 +1,17 @@
+name: tavern_core
+description: Pure-Dart pub and restaurant domain primitives for Tavern.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.14.0
+
+resolution: workspace
+
+dependencies:
+  meta: ^1.17.0
+  realm_core: ^0.1.0
+
+dev_dependencies:
+  realm_lints: ^0.1.0
+  test: ^1.30.0

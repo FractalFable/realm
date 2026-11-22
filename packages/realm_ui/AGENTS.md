@@ -3,9 +3,9 @@
 Scoped rules for creating or modifying shared Flutter UI primitives and white-label theming in `packages/realm_ui`.
 
 1. **Modular Design Imports**: Import Material/Cupertino widgets from `package:material_ui/material_ui.dart` (Flutter 3.50+ modular design packages and `migrate_design_widgets`).
-2. **Strict Brand Neutrality**: Derive all colors, typography, and radii from `Theme.of(context)` / `VenueBranding`. Never hardcode venue brands, fixed venue colors, or `http(s)://` URLs in `lib/`.
+2. **Strict Brand Neutrality**: Derive all colors, typography, and radii from `Theme.of(context)` / `AppBranding` (Tavern aliases this as `VenueBranding`). Never hardcode fixed brands, fixed venue colors, or `http(s)://` URLs in `lib/`.
 3. **Required Deliverables per Widget**:
-   - **Widget test** in `test/` verifying both **light + dark** brightness and at least two distinct `VenueBranding` seed colors.
+   - **Widget test** in `test/` verifying both **light + dark** brightness and at least two distinct `AppBranding` seed colors.
    - **Widget Preview** using `@Preview` / `@MultiPreview` from `package:flutter/widget_previews.dart` with neutral `Example Venue` branding and explicit `size` constraints (no `dart:io` or `dart:ffi`).
    - **Testability & A11y**: Stable `ValueKey('...')` and `Semantics(identifier: '...', label: '...')` on interactive controls and icon-only buttons.
 4. **Visual & Accessibility Verification**:
