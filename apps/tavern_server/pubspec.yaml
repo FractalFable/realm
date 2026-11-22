@@ -1,0 +1,19 @@
+name: tavern_server
+description: Relic 2 backend server for Tavern pub and restaurant management.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.14.0
+
+resolution: workspace
+
+dependencies:
+  realm_core: ^0.1.0
+  realm_server_kit: ^0.1.0
+  relic: ^2.0.0
+  tavern_core: ^0.1.0
+
+dev_dependencies:
+  realm_lints: ^0.1.0
+  test: ^1.30.0

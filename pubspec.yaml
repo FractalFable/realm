@@ -6,4 +6,4 @@ environment:
 
 workspace:
   - packages/*
-  # - apps/*  # Uncomment once the first Dart/Flutter app is added under apps/
+  - apps/*
