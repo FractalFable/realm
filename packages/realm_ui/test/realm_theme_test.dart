@@ -4,8 +4,8 @@ import 'package:realm_core/realm_core.dart';
 import 'package:realm_ui/realm_ui.dart';
 
 void main() {
-  final branding = VenueBranding(
-    name: 'Example Venue',
+  final branding = AppBranding(
+    name: 'Example Realm',
     primaryColorArgb: 0xFF6B2D5C,
   );
 
@@ -41,6 +41,19 @@ void main() {
     expect(
       firstTheme.colorScheme.primary,
       isNot(equals(secondTheme.colorScheme.primary)),
+    );
+  });
+
+  test('accepts VenueBranding subtype seamlessly', () {
+    final venueBranding = VenueBranding(
+      name: 'Example Venue',
+      primaryColorArgb: 0xFF6B2D5C,
+    );
+
+    final theme = buildRealmTheme(venueBranding);
+    expect(
+      theme.colorScheme.primary,
+      buildRealmTheme(branding).colorScheme.primary,
     );
   });
 }

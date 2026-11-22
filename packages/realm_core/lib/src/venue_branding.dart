@@ -1,114 +1,36 @@
 import 'package:meta/meta.dart';
 
+import 'app_branding.dart';
 import 'uri_validation.dart';
 
-/// Supported deployment topologies for a Realm venue instance.
-enum HostingMode {
-  selfHosted,
-  managed;
-
-  /// Parses a [HostingMode] from its JSON [name].
-  static HostingMode fromName(String name) {
-    for (final value in values) {
-      if (value.name == name) {
-        return value;
-      }
-    }
-    throw ArgumentError.value(name, 'hostingMode', 'Unknown hosting mode.');
-  }
-}
+export 'app_branding.dart' show HostingMode;
 
 /// Operator-supplied branding configuration for a venue.
+///
+/// Extends [AppBranding] so venue branding works seamlessly with shared
+/// `realm_ui` theming while preserving Tavern compatibility.
 @immutable
-class VenueBranding({
-  required final String name,
-  required final int primaryColorArgb,
-  final String? tagline,
-  final Uri? logoUrl,
-}) {
-  this {
-    if (name.trim().isEmpty) {
-      throw ArgumentError.value(
-        name,
-        'name',
-        'Venue name must not be empty or whitespace.',
-      );
-    }
-    if (primaryColorArgb < 0 ||
-        primaryColorArgb > 0xFFFFFFFF ||
-        (primaryColorArgb & 0xFF000000) == 0) {
-      throw ArgumentError.value(
-        primaryColorArgb,
-        'primaryColorArgb',
-        'Must be a 32-bit ARGB integer (0..0xFFFFFFFF) with non-zero alpha.',
-      );
-    }
-    if (tagline case final value? when value.trim().isEmpty) {
-      throw ArgumentError.value(
-        value,
-        'tagline',
-        'Tagline must not be empty or whitespace when provided.',
-      );
-    }
-    if (logoUrl case final url?) {
-      validateHttpUri(url, 'logoUrl');
-    }
-  }
+class VenueBranding extends AppBranding {
+  /// Creates and validates a [VenueBranding].
+  VenueBranding({
+    required super.name,
+    required super.primaryColorArgb,
+    super.tagline,
+    super.logoUrl,
+  });
 
   /// Decodes and validates a [VenueBranding] from JSON.
   factory VenueBranding.fromJson(Map<String, Object?> json) {
-    final name = switch (json['name']) {
-      final String value => value,
-      _ => throw ArgumentError.value(
-        json['name'],
-        'name',
-        'Expected a string venue name.',
-      ),
-    };
-    final primaryColorArgb = switch (json['primaryColorArgb']) {
-      final int value => value,
-      _ => throw ArgumentError.value(
-        json['primaryColorArgb'],
-        'primaryColorArgb',
-        'Expected an integer ARGB color.',
-      ),
-    };
-    final tagline = switch (json['tagline']) {
-      null => null,
-      final String value => value,
-      final other => throw ArgumentError.value(
-        other,
-        'tagline',
-        'Expected a string or null tagline.',
-      ),
-    };
-    final logoUrl = switch (json['logoUrl']) {
-      null => null,
-      final String value => parseHttpUri(value, 'logoUrl'),
-      final other => throw ArgumentError.value(
-        other,
-        'logoUrl',
-        'Expected a URI string or null logoUrl.',
-      ),
-    };
-
+    final decoded = AppBranding.fromJson(json);
     return VenueBranding(
-      name: name,
-      primaryColorArgb: primaryColorArgb,
-      tagline: tagline,
-      logoUrl: logoUrl,
+      name: decoded.name,
+      primaryColorArgb: decoded.primaryColorArgb,
+      tagline: decoded.tagline,
+      logoUrl: decoded.logoUrl,
     );
   }
 
-  /// Serializes this branding configuration to JSON.
-  Map<String, Object?> toJson() => {
-    'name': name,
-    'primaryColorArgb': primaryColorArgb,
-    'tagline': ?tagline,
-    'logoUrl': ?logoUrl?.toString(),
-  };
-
-  /// Returns a copy of this branding with the given fields updated.
+  @override
   VenueBranding copyWith({
     String? name,
     int? primaryColorArgb,
@@ -131,7 +53,8 @@ class VenueBranding({
           other.logoUrl == logoUrl;
 
   @override
-  int get hashCode => Object.hash(name, primaryColorArgb, tagline, logoUrl);
+  int get hashCode =>
+      Object.hash(runtimeType, name, primaryColorArgb, tagline, logoUrl);
 
   @override
   String toString() =>
@@ -141,21 +64,13 @@ class VenueBranding({
 
 /// Top-level runtime configuration for a self-hosted or managed venue.
 @immutable
-class VenueConfig({
-  required final VenueBranding branding,
-  final HostingMode hostingMode = .selfHosted,
-  final Uri? apiBaseUrl,
-}) {
-  this {
-    if (apiBaseUrl case final url?) {
-      validateHttpUri(
-        url,
-        'apiBaseUrl',
-        allowFragment: false,
-        allowQuery: false,
-      );
-    }
-  }
+class VenueConfig extends AppConfig {
+  /// Creates and validates a [VenueConfig].
+  VenueConfig({
+    required VenueBranding super.branding,
+    super.hostingMode = .selfHosted,
+    super.apiBaseUrl,
+  });
 
   /// Decodes and validates a [VenueConfig] from JSON.
   factory VenueConfig.fromJson(Map<String, Object?> json) {
@@ -198,16 +113,12 @@ class VenueConfig({
     );
   }
 
-  /// Serializes this configuration to JSON.
-  Map<String, Object?> toJson() => {
-    'branding': branding.toJson(),
-    'hostingMode': hostingMode.name,
-    'apiBaseUrl': ?apiBaseUrl?.toString(),
-  };
+  @override
+  VenueBranding get branding => super.branding as VenueBranding;
 
-  /// Returns a copy of this configuration with the given fields updated.
+  @override
   VenueConfig copyWith({
-    VenueBranding? branding,
+    covariant VenueBranding? branding,
     HostingMode? hostingMode,
     Uri? Function()? apiBaseUrl,
   }) => VenueConfig(
@@ -225,7 +136,8 @@ class VenueConfig({
           other.apiBaseUrl == apiBaseUrl;
 
   @override
-  int get hashCode => Object.hash(branding, hostingMode, apiBaseUrl);
+  int get hashCode =>
+      Object.hash(runtimeType, branding, hostingMode, apiBaseUrl);
 
   @override
   String toString() =>
