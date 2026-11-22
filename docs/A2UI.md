@@ -16,10 +16,13 @@
 
 ## Fit & Boundaries for Realm
 
-1. **White-Label Branding**: Because A2UI renders through a client-owned native catalog, every generated card, table, or action form automatically inherits the venue's `VenueBranding` and `realm_ui` Material theme—avoiding unstyled or inconsistent webviews.
-2. **BYOK API Keys**: Generative UI surfaces must remain **optional and gracefully gated** behind the operator's BYOK LLM configuration (when no API key is configured, all core pub/restaurant workflows continue normally without AI).
-3. **Package Isolation**: When adopted, isolate A2UI integration into an optional `packages/realm_a2ui` workspace package (`resolution: workspace`) rather than coupling `realm_core` or `realm_ui` to agent/LLM dependencies.
-4. **Good Initial Use Cases**:
+1. **White-Label Branding**: Because A2UI renders through a client-owned native catalog, every generated card, table, or action form automatically inherits the instance's `AppBranding` / `VenueBranding` and `realm_ui` Material theme—avoiding unstyled or inconsistent webviews.
+2. **BYOK API Keys & Privacy Gating**: Generative UI surfaces must remain **optional and gracefully gated** behind the operator's BYOK LLM configuration (or local private LLM). When AI is disabled, all core workflows continue normally.
+3. **Package Isolation**: Isolate A2UI integration into `packages/realm_a2ui` (`resolution: workspace`) rather than coupling `realm_core` or `realm_ui` to agent/LLM dependencies.
+4. **Tavern Use Cases** ([Tavern Architecture](apps/TAVERN.md)):
    - **Staff / Manager Copilot**: Natural-language operational queries (sales summaries, low-stock alerts, table/order status) rendered as interactive cards with typed confirmation buttons.
-   - **Customer Discovery**: Interactive menu/pairing filters and allergen-aware suggestions mapped to venue catalog widgets.
-5. **Security & Tier 4 Boundary**: Treat A2UI strictly as presentation + typed user intents. Pricing, inventory locks, allergen integrity, authorization, and payment/POS actions must always be enforced server-side and pass explicit confirmation gates (reviewed under Tier 4 in [`docs/REVIEW_POLICY.md`](REVIEW_POLICY.md)).
+   - **Guest Discovery**: Interactive menu/pairing filters and allergen-aware suggestions mapped to venue catalog widgets.
+5. **Grimoire Use Cases** ([Grimoire Architecture](apps/GRIMOIRE.md)):
+   - **Personal Knowledge Dashboards**: Agents query the user's **local-first hybrid RAG** index over E2EE notes via client-side tools and stream A2UI surfaces (summaries, comparison tables, timelines, interactive action cards) without exposing raw vault keys to the server.
+   - **Script-Emitted UI**: Note scripts (`ScriptBlock`) can return A2UI JSON payloads rendered natively inside a note via `realm_a2ui`, giving scripts rich native UI across iOS, Android, macOS, and Web.
+6. **Security & Tier 4 Boundary**: Treat A2UI strictly as presentation + typed user intents. Pricing, inventory locks, allergen integrity, authorization, payment/POS actions, and E2EE vault access must always be enforced outside the A2UI payload with explicit confirmation gates (reviewed under Tier 4 in [`docs/REVIEW_POLICY.md`](REVIEW_POLICY.md)).
