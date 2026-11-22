@@ -6,7 +6,7 @@ Realm is built and maintained mostly by AI agents, and few humans will read the 
 
 Decisions already made elsewhere still hold: three-layer config and BYOK ([Config & Secrets](CONFIG_AND_SECRETS.md)), pub workspaces and `realm_lints` ([Monorepo](MONOREPO.md)), risk tiers ([Review Policy](REVIEW_POLICY.md)), A2UI isolation ([A2UI](A2UI.md)).
 
-**Read only the section your task needs.** §1 is the summary; §12 lists what is still open.
+**Read only the section your task needs.** §1 is the summary; §12 covers sign-in, payments, tables, and languages, including what is still open.
 
 ## 1. Decision Summary
 
@@ -14,7 +14,7 @@ Decisions already made elsewhere still hold: three-layer config and BYOK ([Confi
 | :--- | :--- | :--- | :--- |
 | D1 | Product scope | Two web apps (staff dashboard, guest ordering) plus one server; **web only, responsive** (phone, tablet, laptop); **online only**; **one venue per instance** | Store apps, offline ordering, multi-venue |
 | D2 | Hosting | **One cheap VPS**, Docker Compose: Caddy + `realm_server` + Postgres, one domain | Managed cloud services, Kubernetes, Redis |
-| D3 | Backend | **`shelf` + `shelf_router`** in `apps/realm_server`, typed endpoints from `realm_protocol` | Serverpod (locks models, ORM, client, and auth to one framework), Dart Frog (no release since 2025-11) |
+| D3 | Backend | **Relic 2** (`relic` router + `relic_io` adapter) in `apps/realm_server`, typed endpoints from `realm_protocol` | Serverpod (locks models, ORM, client, and auth to one framework), shelf (slower, fewer typed APIs), Dart Frog (no release since 2025-11) |
 | D4 | Database | **PostgreSQL 16** via `package:postgres` 3.x with plain SQL; numbered SQL migrations applied by the server at startup | SQLite (runner-up), drift (no stable Postgres 2.x), ORMs |
 | D5 | Shared DTOs | **`packages/realm_protocol`**: `freezed` + `json_serializable` DTOs and typed endpoint descriptors, used by server and apps | Duplicated client/server classes, OpenAPI |
 | D6 | State | **`flutter_bloc` Cubits** with sealed `freezed` states | Riverpod, `ChangeNotifier`, `get_it` |
@@ -53,9 +53,9 @@ Everything runs on one origin, so apps use the same-origin fallback in `ClientEn
 
 **Shared origin means shared browser storage.** Prefix every storage key with the app name (`realm_staff.`, `realm_guest.`). Staff session tokens live in an `HttpOnly`, `Secure`, `SameSite=Strict` cookie scoped to `Path=/api/` and set by the server, never in `localStorage`, so nothing the guest app runs can read them.
 
-## 3. Backend: shelf with Typed Endpoints (D3, D5)
+## 3. Backend: Relic with Typed Endpoints (D3, D5)
 
-**Why shelf**: it is the Dart team's standard HTTP interface (1.4.3, released 2026-10), it is small, and agents know it well. Handlers are thin, so moving to another server library later only touches `lib/src/http/`.
+**Why Relic**: Relic 2.0.0 (2026-11-12) is a standalone, shelf-style server library from the Serverpod team with typed, RFC-compliant headers, a router, middleware, and WebSockets. It is only an HTTP layer, so it brings none of Serverpod's lock-in. Start on `relic_io` (pure Dart, simplest container). The `relic_native` adapter (a native HTTP server, about five times the requests per second in the Relic benchmarks) is a drop-in switch (`app.serveNative()`) if load ever needs it; a single small venue will not. Handlers stay thin, so changing server library later only touches `lib/src/http/`.
 
 **Typed endpoints, defined once.** Each endpoint is a constant in `realm_protocol`:
 
@@ -77,7 +77,7 @@ const placeOrder = Endpoint<PlaceOrderRequest, OrderDto>.post(
 - `services/`: logic, unit-testable with fake repositories.
 - `repositories/`: plain SQL through `package:postgres`, mapping rows to DTOs.
 
-Modules: `bootstrap`, `auth`, `venue`, `menu`, `orders`, `live` (WebSocket), `integrations`, `ai`, later `payments` (Tier 4).
+Modules: `bootstrap`, `auth` (Tier 4), `staff` (accounts and profiles), `venue`, `tables`, `menu`, `orders`, `live` (WebSocket), `payments` (Tier 4), `integrations`, `ai`.
 
 `GET /api/v1/bootstrap` keeps its existing path and `realm_core` contract. Provider webhooks get raw-body routes so signatures can be checked.
 
@@ -201,19 +201,30 @@ Fast and deterministic first. `./scripts/check.sh` runs every layer that is conf
 
 **Never**: hand-edit generated files (`*.g.dart`, `*.freezed.dart`), add a second state or DI library, build SQL with string interpolation, call HTTP directly from a feature, or put a secret in a client package.
 
-## 12. Still Open
+## 12. Sign-In, Payments, Tables, Languages
 
-Decided by the operator on 2026-11-22: staff and guest apps first, web only and responsive, no offline ordering, one venue per instance, one cheap VPS. Still open, with the default agents assume until answered:
+Decided by the operator on 2026-11-22: staff and guest apps first, web only and responsive, no offline ordering, one venue per instance, one cheap VPS, Relic, Cubits. The items below are decided unless marked *Proposed*.
 
-1. **Staff sign-in.** Guest access is already covered by per-order tokens (§3). *Default: the manager signs in with email + password; workers use a short PIN on a device the manager has approved. Needs a Tier 4 design pass.*
-2. **Guest payment.** *Default: guests order without paying online and pay at the counter or table; online payment comes later through a BYOK payment provider.*
-3. **How guests reach the menu.** *Default: a QR code per table linking to `/t/<table-code>`, so orders arrive tagged with the table.*
-4. **First BYOK providers and languages.** Which LLM, payment, and fiscal providers come first, and which UI languages ship first? Fiscal rules depend on the operator's country.
+**Staff accounts** (`auth` and `staff` modules, Tier 4):
+- The person who installs the server becomes the **admin**. On first start with no admin, the server prints a one-time setup link to its log; opening it creates the admin account. If the admin loses access, `realm_server reset-admin` on the host prints a new link.
+- **The admin creates worker accounts** (email + role). Creating one produces a one-time invite link, shown as a link and a QR code, valid for 24 hours. The worker opens it and sets up sign-in. No outgoing email is needed.
+- **Accounts and profiles are separate tables.** `accounts` holds identity (email, role, credentials); `staff_profiles` holds display name and other non-auth details. Profile code never touches credentials.
+- *Proposed*: **passkeys instead of passwords.** The worker's phone or laptop stores the credential, unlocked with fingerprint, face, or device PIN. Nothing can be phished or reused, and there are no passwords to hash, reset, or leak. Email stays the account identifier. If a worker loses their device, the admin issues a new invite link. Server-side verification uses a small WebAuthn library (`passkeys_server` 1.0.0 is the candidate; `security-auditor` checks it first). If the operator prefers passwords, the fallback is email + password hashed with Argon2id, behind the same `auth` interface.
+- Sessions: an `HttpOnly` cookie (§2), 12 hours for workers and 30 minutes of inactivity for admin pages.
+
+**Payments** (`payments` module, Tier 4):
+- Guests can pay **online through Besteron** (a BYOK `payments` provider; the operator's own Besteron credentials, stored per [Config & Secrets](CONFIG_AND_SECRETS.md) §3), or **in person by card or cash**, which staff record on the order (`paymentMethod: online | card | cash`).
+- The Besteron adapter sits behind a provider-neutral `PaymentProvider` interface, confirms payment only from a verified server-to-server notification (never from the browser redirect), and is idempotent per order. Its API details come from Besteron's documentation when the module is built.
+- *Open*: **fiscal receipts.** Slovenia requires certain receipts, including card and cash payments, to be confirmed with the tax authority (FURS). The `posFiscal` provider exists for this, but which payments need it and how is the operator's call to confirm before `payments` ships.
+
+**Tables**: every table has its own QR code linking to `/t/<table-code>`. The code is random (not the table number), so nobody can order to another table by guessing a URL; the admin can regenerate it and print new codes from the staff app.
+
+**Languages**: English and Slovenian (`en`, `sl`) in `realm_l10n`; the guest app follows the browser language and has a switcher. Menu text the venue enters is stored per language (`{"en": ..., "sl": ...}`), with English as the fallback.
 
 ## 13. Follow-Up Work
 
 1. Scaffold `packages/realm_protocol` with the `Endpoint` type, `ApiError`, and `./scripts/gen.sh`, plus the CI generated-code drift check.
-2. Scaffold `apps/realm_server` (shelf, migrator, bootstrap endpoint, server test against Postgres), `compose.yaml`, and the Caddyfile. Uncomment `- apps/*` in the root `pubspec.yaml`.
+2. Scaffold `apps/realm_server` (Relic, migrator, bootstrap endpoint, server test against Postgres), `compose.yaml`, and the Caddyfile. Uncomment `- apps/*` in the root `pubspec.yaml`.
 3. Add `realm_client`, then the first `feature_*` package (guest menu) following §11.
 4. Add the import-direction check to `scripts/check_hygiene.py`.
 5. Scaffold `realm_vault` (Tier 4, after a `security-auditor` dependency check).
