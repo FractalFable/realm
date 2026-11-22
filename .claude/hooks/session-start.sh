@@ -4,8 +4,9 @@
 # container skips both installs in well under a second.
 #
 # Also usable as the cloud environment's setup script (runs before Claude
-# starts, so the Dart MCP server finds `dart` on the very first session):
-#   CLAUDE_CODE_REMOTE=true bash .claude/hooks/session-start.sh
+# starts, so the Dart MCP server finds `dart` on the very first session). The
+# setup script starts in the parent of the checkout, so enter the repo first:
+#   (cd realm && CLAUDE_CODE_REMOTE=true bash .claude/hooks/session-start.sh)
 set -euo pipefail
 
 if [[ "${CLAUDE_CODE_REMOTE:-}" != "true" ]]; then
