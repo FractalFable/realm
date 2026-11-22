@@ -10,27 +10,29 @@
 - Never push directly to `develop`, `staging`, or `production`; all changes land via pull requests.
 - Never force-push, rewrite shared history, or merge into `staging`/`production` unless explicitly instructed.
 
-## Feature Completion: Auto-Merge via Pull Request
+## Feature Completion: CI-Gated Auto-Merge
 
-Agents own the full delivery loop. When a feature is complete, **open and merge the PR autonomously — do not ask the operator for permission to merge.**
+Agents own the delivery loop ([AI Efficiency & Autonomy](AI_EFFICIENCY.md) §5). Do not ask the operator for permission to merge Tier 1–3 work.
 
-1. **Branch**: Start work on `<type>/<short-slug>` from an up-to-date `develop` (`feat/`, `fix/`, `docs/`, `chore/`, `refactor/`, `test/`).
-2. **Verify**: `./scripts/check.sh` passes, then `code-reviewer` returns `APPROVE` or `APPROVE WITH NOTES` (fix and delta re-review any blocking findings first; see [Code Review Policy](REVIEW_POLICY.md)).
-3. **Commit & push**: Conventional Commit messages (`feat: ...`, `fix: ...`); `git push -u origin <branch>`.
-4. **Open PR** against `develop` with a summary, verification output, and review verdict:
+1. **Branch**: `<type>/<short-slug>` from an up-to-date `develop` (`feat/`, `fix/`, `docs/`, `chore/`, `refactor/`, `test/`).
+2. **Verify**: `./scripts/check.sh --quiet` passes, then `critic` returns `PASS` where its tier requires it ([Code Review Policy](REVIEW_POLICY.md)).
+3. **Commit & push**: Conventional Commits; `git push -u origin <branch>`.
+4. **Open PR** against `develop` with a **Verification Evidence** block (commands, pass counts, runtime proof, `critic` verdict):
    ```bash
-   gh pr create --base develop --title "<type>: <summary>" --body "<summary, check.sh result, review verdict>"
+   gh pr create --base develop --title "<type>: <summary>" --body "<summary + Verification Evidence>"
    ```
-5. **Wait for CI** (if any checks are configured): `gh pr checks --watch`. Fix failures and push again.
-6. **Merge & clean up**:
+5. **Enable auto-merge** (Tier 1–3 only); GitHub merges once the `check` workflow passes:
    ```bash
-   gh pr merge --squash --delete-branch
-   git checkout develop && git pull --ff-only
+   gh pr merge --auto --squash --delete-branch
    ```
-7. **Report** the merged PR URL in the final summary.
+   In cloud sessions without `gh`, use the GitHub MCP `enable_pr_auto_merge` tool.
+6. **Report** the PR URL; fix and push again if CI fails (counts toward the 2-attempt circuit breaker).
+
+### One-time repository setup (operator)
+CI-gated auto-merge needs, under GitHub **Settings**: *General → Allow auto-merge*, and a branch protection rule (or ruleset) on `develop` requiring the `check` status check from [`.github/workflows/check.yml`](../.github/workflows/check.yml). Without the required check, `--auto` either fails or merges immediately with no CI gate.
 
 ### Do NOT auto-merge (open the PR, then stop and report the link)
-- `code-reviewer` verdict is `NEEDS HUMAN SIGN-OFF` (any **Tier 4** critical/high finding or ambiguity: payments, POS/fiscal, auth, security, BYOK secret storage, production deploys).
+- `critic` verdict is `NEEDS HUMAN SIGN-OFF` (any **Tier 4** critical/high finding or ambiguity: payments, POS/fiscal, auth, security, BYOK secret storage, production deploys).
 - Behavioral prompt/agent changes gated by [Agent Improvement & Evals](AGENT_IMPROVEMENT.md).
 - Unresolved product ambiguity, or the operator explicitly asked to review before merging.
 

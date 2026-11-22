@@ -29,3 +29,4 @@ config.local.json
 
 # Agent worktrees
 .claude/worktrees/
+.claude/settings.local.json
