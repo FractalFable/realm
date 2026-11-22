@@ -1,0 +1,24 @@
+name: grimoire
+description: Multi-platform E2EE interactive note-taking app built on Realm.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.14.0
+  flutter: ">=3.50.0"
+
+resolution: workspace
+
+dependencies:
+  flutter:
+    sdk: flutter
+  grimoire_core: ^0.1.0
+  material_ui: ^1.8.0
+  realm_a2ui: ^0.1.0
+  realm_core: ^0.1.0
+  realm_ui: ^0.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  realm_lints: ^0.1.0
