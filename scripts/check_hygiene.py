@@ -25,11 +25,13 @@ def iter_markdown_files() -> list[pathlib.Path]:
         p = ROOT / name
         if p.is_file():
             files.append(p)
-    for folder in ("docs", ".agents"):
+    for folder in ("docs", ".claude"):
         d = ROOT / folder
         if d.is_dir():
-            files.extend(sorted(d.rglob("*.md")))
-    for pattern in ("packages/*/AGENTS.md", "apps/*/AGENTS.md"):
+            files.extend(
+                p for p in sorted(d.rglob("*.md")) if "worktrees" not in p.parts
+            )
+    for pattern in ("packages/*/AGENTS.md", "apps/*/AGENTS.md", "packages/*/CLAUDE.md", "apps/*/CLAUDE.md"):
         files.extend(sorted(ROOT.glob(pattern)))
     return files
 

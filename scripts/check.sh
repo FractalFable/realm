@@ -36,7 +36,7 @@ run_step() {
 }
 
 run_step "Checking formatting..." dart format --output=none --set-exit-if-changed .
-run_step "Running workspace static analysis..." dart analyze
+run_step "Running workspace static analysis..." dart analyze --fatal-infos
 run_step "Running deterministic hygiene checks..." ./scripts/check_hygiene.py
 
 run_tests_in() {

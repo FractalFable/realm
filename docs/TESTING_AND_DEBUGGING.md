@@ -5,22 +5,22 @@ Runbook for **Flutter 3.50+ / Dart 3.14+** verification, Widget Previews, live U
 
 ## 1. Verification Pyramid & Deterministic Gate
 
-Run from the narrowest check upward, then run [`../scripts/check.sh`](../scripts/check.sh) before `code-reviewer`:
+Run from the narrowest check upward, then run [`../scripts/check.sh`](../scripts/check.sh) before `critic`:
 
 | Layer | Scope | Command / Tool | Required Checks |
 | :--- | :--- | :--- | :--- |
 | **1. Unit** | Pure Dart (`packages/realm_core`) | `./scripts/check.sh --quiet packages/realm_core` | Logic, serialization, endpoint/config resolution |
 | **2. Widget** | Flutter UI (`packages/realm_ui`, future `apps/*`) | `./scripts/check.sh --quiet packages/realm_ui` | Both **light + dark** `Brightness` and `>= 2` `VenueBranding` seeds |
-| **3. Preview** | Isolated UI states (no emulator/backend) | `(cd packages/realm_ui && flutter widget-preview start)` + `browser` | `@Preview` / `@MultiPreview` with `Example Venue` & explicit `Size` (no `dart:io`/`dart:ffi`) |
-| **4. Golden** | Visual regression *(when configured)* | `alchemist` + `flutter_test_config.dart` | Inspect every diff in `failures/*.png` via `read_file` before `--update-goldens` |
+| **3. Preview** | Isolated UI states (no emulator/backend) | `(cd packages/realm_ui && flutter widget-preview start)` + screenshot review | `@Preview` / `@MultiPreview` with `Example Venue` & explicit `Size` (no `dart:io`/`dart:ffi`) |
+| **4. Golden** | Visual regression *(when configured)* | `alchemist` + `flutter_test_config.dart` | Inspect every diff in `failures/*.png` with the Read tool before `--update-goldens` |
 | **5. E2E** | Future runnable apps (`apps/*`) | `integration_test` + `flutter_driver` (opt-in: Patrol / Maestro) | End-to-end flows; Patrol for native OS dialogs; Maestro for YAML smoke flows |
 | **6. Repo Gate** | Full workspace | `./scripts/check.sh --quiet` | Format, `dart analyze`, hygiene, and all package tests |
 
 ## 2. Testability & Accessibility Contract (Every Widget/Screen)
 
 1. **Test keys**: Add stable `ValueKey('...')` on interactive controls and landmarks (`WidgetTester`, `flutter_driver`, Patrol).
-2. **Semantics**: Wrap icon-only buttons and custom controls in `Semantics(identifier: '...', label: '...')` (screen readers, Maestro, `flutter_a11y_agent`).
-3. **A11y audit**: Run `flutter_a11y_agent` on new widgets/screens for contrast, tap targets, and semantics.
+2. **Semantics**: Wrap icon-only buttons and custom controls in `Semantics(identifier: '...', label: '...')` (screen readers, Maestro, a11y guideline tests).
+3. **A11y audit**: In widget tests, assert `meetsGuideline(textContrastGuideline)`, `androidTapTargetGuideline`, `iOSTapTargetGuideline`, and `labeledTapTargetGuideline` for new widgets/screens.
 4. **White-label & endpoint neutrality**: Never hardcode venue brands, fixed colors, or `http(s)://` URLs in `lib/`; use `Theme.of(context)` / `VenueBranding` and `ClientEndpointConfig` ([Config, Branding & BYOK Secrets](CONFIG_AND_SECRETS.md)).
 
 ## 3. Live App Inspection & UI Driving (`dart mcp-server`)
