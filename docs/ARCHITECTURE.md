@@ -12,9 +12,9 @@ Decisions already made elsewhere still hold: three-layer config and BYOK ([Confi
 
 | # | Area | Decision | Rejected |
 | :--- | :--- | :--- | :--- |
-| D1 | Product scope | Two web apps (staff dashboard, guest ordering) plus one server; **web only, responsive** (phone, tablet, laptop); **online only**; **one venue per instance** | Store apps, offline ordering, multi-venue |
+| D1 | Product scope | Multi-app Realm platform: **Tavern** (`tavern_staff` + `tavern_guest`, web-only responsive, online-only, one venue per instance) + **Grimoire** (multi-platform iOS/Android/macOS/Web, local-first, E2EE) + modular `realm_server` | Monolithic single-purpose app |
 | D2 | Hosting | **One cheap VPS**, Docker Compose: Caddy + `realm_server` + Postgres, one domain | Managed cloud services, Kubernetes, Redis |
-| D3 | Backend | **Relic 2** (`relic` router + `relic_native` adapter) in `apps/realm_server`, typed endpoints from `realm_protocol` | Serverpod (locks models, ORM, client, and auth to one framework), shelf (slower, fewer typed APIs), Dart Frog (no release since 2025-11) |
+| D3 | Backend | **Relic 2** (`relic` router + `relic_native` adapter) in `apps/realm_server`, toggleable app modules (`tavern`, `grimoire`), typed endpoints from `realm_protocol` | Serverpod (locks models, ORM, client, and auth to one framework), shelf (slower, fewer typed APIs), Dart Frog (no release since 2025-11) |
 | D4 | Database | **PostgreSQL 16** via `package:postgres` 3.x with plain SQL; numbered SQL migrations applied by the server at startup | SQLite (runner-up), drift (no stable Postgres 2.x), ORMs |
 | D5 | Shared DTOs | **`packages/realm_protocol`**: `freezed` + `json_serializable` DTOs and typed endpoint descriptors, used by server and apps | Duplicated client/server classes, OpenAPI |
 | D6 | State | **`flutter_bloc` Cubits** with sealed `freezed` states | Riverpod, `ChangeNotifier`, `get_it` |
@@ -27,31 +27,32 @@ Decisions already made elsewhere still hold: three-layer config and BYOK ([Confi
 
 ## 2. Product Scope and Hosting (D1, D2)
 
-**Apps** (Flutter web, responsive from phone to laptop):
+**Applications on the Realm Platform**:
 
-| App | Users | First screens |
-| :--- | :--- | :--- |
-| `apps/realm_staff` | Workers and the manager | Live order board, order status changes, menu editing, settings (branding, BYOK keys; manager only) |
-| `apps/realm_guest` | Guests at the venue | Menu, cart, place order, order status |
-| `apps/realm_server` | — | API, WebSocket, migrations, BYOK proxy |
+| App | Product | Target Platforms | First / Core Scope |
+| :--- | :--- | :--- | :--- |
+| `apps/tavern_staff` | [Tavern](apps/TAVERN.md) | Flutter Web (responsive) | Live order board, order status changes, menu editing, settings (branding, BYOK keys; manager only), A2UI copilot |
+| `apps/tavern_guest` | [Tavern](apps/TAVERN.md) | Flutter Web (responsive) | Menu, cart, place order, order status, A2UI pairing/discovery |
+| `apps/grimoire` | [Grimoire](apps/GRIMOIRE.md) | Flutter (iOS, Android, macOS, Web) | E2EE interactive block notes, backlinks graph, web embeds, QuickJS/Worker scripts, local-first RAG, A2UI |
+| `apps/realm_server` | Shared | Dart AOT binary | Modular API (`bootstrap`, `auth`, `integrations`, `ai`, `live`, plus toggleable `tavern` and `grimoire` modules), migrations, BYOK proxy |
 
-- **Web only.** No App Store or Play Store builds for now. Do not add `dart:io`-only code to apps or UI packages; everything must compile for web. Layouts use breakpoints from `realm_ui` (compact < 600, medium < 1024, expanded >= 1024 logical pixels).
-- **Online only.** No local database, no sync queue. If the connection drops, show a clear offline banner and disable ordering until it returns.
-- **One venue per instance.** One small business runs one copy. There is one `venue` row; other tables do not carry tenant columns. The BYOK AAD still binds that venue's id, as [Config & Secrets](CONFIG_AND_SECRETS.md) §3 requires. `HostingMode` stays `selfHosted` by default.
+- **Tavern is web-only & online-only.** No App Store or Play Store builds for Tavern for now. Do not add `dart:io`-only code to Tavern apps or shared UI packages; everything in `realm_ui`, `realm_a2ui`, `tavern_*`, and `grimoire_core` must compile for Web. Layouts use breakpoints from `realm_ui` (compact < 600, medium < 1024, expanded >= 1024 logical pixels). If Tavern's connection drops, show a clear offline banner and disable ordering until it returns.
+- **Grimoire is multi-platform & local-first.** Built for iOS, Android, macOS, and Web using E2EE client-side storage, local hybrid RAG, and sandboxed JS scripting ([Grimoire Architecture](apps/GRIMOIRE.md)).
+- **One venue per Tavern instance.** One small business runs one copy. There is one `venue` row; other Tavern tables do not carry tenant columns. The BYOK AAD still binds that venue's id, as [Config & Secrets](CONFIG_AND_SECRETS.md) §3 requires. `HostingMode` stays `selfHosted` by default.
 
 **Hosting**: one VPS (about 2 GB RAM is enough to start) running `compose.yaml` with three containers:
 
 | Container | Role |
 | :--- | :--- |
-| `caddy` | Automatic HTTPS for the operator's domain; serves the guest web build at `/` and the staff build at `/staff/`; proxies `/api/` (REST and the `/api/v1/ws` WebSocket) to the server |
-| `realm_server` | AOT-compiled Dart server (`dart compile exe`), stateless |
+| `caddy` | Automatic HTTPS for the operator's domain; serves `tavern_guest` at `/`, `tavern_staff` at `/staff/`, and optional `grimoire` web at `/grimoire/`; proxies `/api/` (REST and `/api/v1/ws`) to the server |
+| `realm_server` | AOT-compiled Dart server (`dart compile exe`), stateless, with toggleable `tavern` and `grimoire` modules |
 | `postgres` | Postgres 16 with a named volume; a daily `pg_dump` to a backup volume |
 
-Caddy must fall back to each app's `index.html` for unknown paths under its prefix (`/staff/*` for staff, everything else outside `/api/` for guest), so QR deep links such as `/t/<table-code>` and browser refresh work.
+Caddy must fall back to each web app's `index.html` for unknown paths under its prefix (`/staff/*` for `tavern_staff`, `/grimoire/*` for `grimoire`, everything else outside `/api/` for `tavern_guest`), so QR deep links such as `/t/<table-code>` and browser refresh work.
 
-Everything runs on one origin, so apps use the same-origin fallback in `ClientEndpointConfig` and need no `config.json`. The operator supplies only a domain and the secrets in [Config & Secrets](CONFIG_AND_SECRETS.md) §3.
+Everything runs on one origin, so web apps use the same-origin fallback in `ClientEndpointConfig` and need no `config.json`. The operator supplies only a domain and the secrets in [Config & Secrets](CONFIG_AND_SECRETS.md) §3.
 
-**Shared origin means shared browser storage.** Prefix every storage key with the app name (`realm_staff.`, `realm_guest.`). Staff session tokens live in an `HttpOnly`, `Secure`, `SameSite=Strict` cookie scoped to `Path=/api/` and set by the server, never in `localStorage`, so nothing the guest app runs can read them.
+**Shared origin means shared browser storage.** Prefix every storage key with the app name (`tavern_staff.`, `tavern_guest.`, `grimoire.`). Staff session tokens live in an `HttpOnly`, `Secure`, `SameSite=Strict` cookie scoped to `Path=/api/` and set by the server, never in `localStorage`, so nothing the guest app runs can read them.
 
 ## 3. Backend: Relic with Typed Endpoints (D3, D5)
 
@@ -77,7 +78,9 @@ const placeOrder = Endpoint<PlaceOrderRequest, OrderDto>.post(
 - `services/`: logic, unit-testable with fake repositories.
 - `repositories/`: plain SQL through `package:postgres`, mapping rows to DTOs.
 
-Modules: `bootstrap`, `auth` (Tier 4), `staff` (accounts and profiles), `venue`, `tables`, `menu`, `orders`, `live` (WebSocket), `payments` (Tier 4), `integrations`, `ai`.
+Shared modules: `bootstrap`, `auth` (Tier 4), `integrations` (Tier 4), `ai`, `live` (WebSocket).
+Tavern modules (toggleable): `staff` (accounts and profiles), `venue`, `tables`, `menu`, `orders`, `payments` (Tier 4).
+Grimoire modules (toggleable): `grimoire` (zero-knowledge encrypted blob & revision sync).
 
 `GET /api/v1/bootstrap` keeps its existing path and `realm_core` contract. Provider webhooks get raw-body routes so signatures can be checked.
 
@@ -90,30 +93,35 @@ Modules: `bootstrap`, `auth` (Tier 4), `staff` (accounts and profiles), `venue`,
 The table below is authoritative; the diagram only shows the layering.
 
 ```
-apps/realm_staff, apps/realm_guest      (thin shells: routes, DI wiring)
+apps/tavern_staff, apps/tavern_guest, apps/grimoire   (thin shells: routes, DI wiring)
         │
 packages/feature_<name>                 (screens + cubits + repositories for one feature)
         │
-packages/realm_ui   packages/realm_client   packages/realm_l10n
+packages/realm_ui   packages/realm_client   packages/realm_l10n   packages/realm_a2ui
         │                  │
         │           packages/realm_protocol (DTOs + endpoint descriptors, pure Dart)
         │                  │
-packages/realm_core  ◄─────┘            (pure Dart, no Flutter, no IO)
+packages/tavern_core  packages/grimoire_core  ◄── packages/realm_crypto (pure Dart E2EE, Tier 4)
+        │                  │
+        └─────────► packages/realm_core ◄──┘ (pure Dart, no Flutter, no IO)
 
-apps/realm_server ──► realm_protocol, realm_core, realm_vault
-packages/realm_vault                    (pure Dart crypto, Tier 4)
+apps/realm_server ──► realm_protocol, realm_core, tavern_core, grimoire_core, realm_vault
+packages/realm_vault                    (pure Dart server BYOK crypto, Tier 4)
 ```
 
 | Package | Contains | May depend on | Never |
 | :--- | :--- | :--- | :--- |
-| `realm_core` | Value types, validation, money as integer minor units, `ClientEndpointConfig`, `VenueBootstrap` | `meta` | Flutter, IO, HTTP |
+| `realm_core` | Value types, validation, `ClientEndpointConfig`, `AppBranding`, `AppBootstrap`, `VenueBootstrap` compat | `meta` | Flutter, IO, HTTP, product-specific domain models |
+| `tavern_core` | Pub/restaurant primitives (`Money`, `LocalizedText`, `TableCode`, re-exported `Venue*`) | `realm_core`, `meta` | Flutter, IO, HTTP |
+| `grimoire_core` | Note AST (`NoteDocument`, `NoteBlock`), `NoteGraph`, `EncryptedBlobEnvelope` | `realm_core`, `meta` | Flutter, IO, HTTP |
+| `realm_crypto` | Client-side E2EE AEAD & key derivation (`lib/src/crypto/`, Tier 4) | `grimoire_core`, `cryptography`, `meta` | Flutter, IO, network |
 | `realm_protocol` | `freezed` DTOs, `Endpoint` descriptors, `ApiError`, `LiveEvent` | `realm_core`, `freezed_annotation`, `json_annotation` | Flutter, HTTP clients, `dart:io` |
-| `realm_ui` | Theme from `VenueBranding`, breakpoints, design-system widgets | `realm_core`, `material_ui` | Network, business logic |
-| `realm_l10n` | ARB files + `flutter gen-l10n` output | Flutter | Venue copy (comes from the server) |
+| `realm_ui` | Theme from `AppBranding` / `VenueBranding`, breakpoints, design-system widgets | `realm_core`, `material_ui` | Network, business logic |
+| `realm_l10n` | ARB files + `flutter gen-l10n` output | Flutter | Instance copy (comes from the server) |
 | `realm_client` | HTTP + WebSocket client for `Endpoint`s, bootstrap fetch, session storage | `realm_core`, `realm_protocol` | Widgets |
-| `feature_<name>` | One feature: `lib/src/ui/`, `lib/src/cubit/`, `lib/src/repositories/` | `realm_core`, `realm_protocol`, `realm_ui`, `realm_l10n`, `realm_client` | Another `feature_*`; `api.call` outside `repositories/` |
-| `realm_vault` | AEAD envelope encryption, key ring, `keyHint` masking, all under `lib/src/crypto/` | `realm_core`, crypto lib | DB access, HTTP |
-| `realm_a2ui` | Optional generative UI ([A2UI](A2UI.md)) | `realm_ui`, `a2ui_*` | Required by any core feature |
+| `feature_<name>` | One feature: `lib/src/ui/`, `lib/src/cubit/`, `lib/src/repositories/` | `realm_core`, `tavern_core` or `grimoire_core`, `realm_protocol`, `realm_ui`, `realm_l10n`, `realm_client` | Another `feature_*`; `api.call` outside `repositories/` |
+| `realm_vault` | Server BYOK AEAD envelope encryption, key ring, `keyHint` masking (`lib/src/crypto/`, Tier 4) | `realm_core`, `cryptography` | DB access, HTTP |
+| `realm_a2ui` | Optional generative UI ([A2UI](A2UI.md)) | `realm_core`, `realm_ui`, `a2ui_*` | Required by any non-AI core feature |
 
 Every package also takes `realm_lints` as a dev dependency and references siblings by version constraint, as [Monorepo](MONOREPO.md) requires.
 
@@ -201,9 +209,9 @@ Fast and deterministic first. `./scripts/check.sh` runs every layer that is conf
 
 **Never**: hand-edit generated files (`*.g.dart`, `*.freezed.dart`), add a second state or DI library, build SQL with string interpolation, call HTTP directly from a feature, or put a secret in a client package.
 
-## 12. Sign-In, Payments, Tables, Languages
+## 12. Tavern Decisions: Sign-In, Payments, Tables, Languages
 
-Decided by the operator on 2026-11-22: staff and guest apps first, web only and responsive, no offline ordering, one venue per instance, one cheap VPS, Relic, Cubits. The items below are decided unless marked *Proposed*.
+Decided by the operator on 2026-11-22 for **Tavern** (expanded to multi-app Realm alongside **Grimoire**, see [Grimoire Architecture](apps/GRIMOIRE.md)): web-only and responsive for Tavern, no offline ordering, one venue per instance, one cheap VPS, Relic, Cubits. The items below are decided unless marked *Proposed*.
 
 **Staff accounts** (`auth` and `staff` modules, Tier 4):
 - The person who installs the server becomes the **admin**. On first start with no admin, the server prints a one-time setup link to its log; opening it creates the admin account. If the admin loses access, `realm_server reset-admin` on the host prints a new link.
@@ -229,8 +237,8 @@ Decided by the operator on 2026-11-22: staff and guest apps first, web only and 
 
 ## 13. Follow-Up Work
 
-1. Scaffold `packages/realm_protocol` with the `Endpoint` type, `ApiError`, and `./scripts/gen.sh`, plus the CI generated-code drift check.
-2. Scaffold `apps/realm_server` (Relic, migrator, bootstrap endpoint, server test against Postgres), `compose.yaml`, and the Caddyfile. Uncomment `- apps/*` in the root `pubspec.yaml`.
-3. Add `realm_client`, then the first `feature_*` package (guest menu) following §11.
-4. Add the import-direction check to `scripts/check_hygiene.py`.
-5. Scaffold `realm_vault` (Tier 4, after a `security-auditor` dependency check).
+1. Generalize `realm_core` & `realm_ui` (`AppBranding` / `AppBootstrap`) and scaffold `packages/tavern_core` and `packages/grimoire_core`.
+2. Scaffold `apps/realm_server` (Relic, toggleable `tavern` & `grimoire` modules, bootstrap endpoint), `apps/tavern_staff`, `apps/tavern_guest`, `packages/realm_a2ui`, and `apps/grimoire`. Uncomment `- apps/*` in the root `pubspec.yaml`.
+3. Scaffold `packages/realm_crypto` (Tier 4 client-side E2EE for Grimoire) and `packages/realm_vault` (Tier 4 server BYOK crypto) after `security-auditor` dependency checks.
+4. Scaffold `packages/realm_protocol` with the `Endpoint` type, `ApiError`, `./scripts/gen.sh`, and CI generated-code drift check, plus `realm_client` and Postgres migrations (`compose.yaml`, Caddyfile).
+5. Add the import-direction check to `scripts/check_hygiene.py`.

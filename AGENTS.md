@@ -1,10 +1,12 @@
 # AGENTS.md
 
-Monorepo for Realm (Dart & Flutter workspace + supporting tools). **Token rule: Do NOT pre-read `docs/*.md` upfront—read only the specific doc needed for your active task.**
+Multi-app monorepo for **Realm** (Dart & Flutter shared platform + modular backend hosting **Tavern**, **Grimoire**, and future apps). **Token rule: Do NOT pre-read `docs/*.md` upfront—read only the specific doc needed for your active task.**
 
 ## Docs Index (Read On Demand Only)
-- [Project Overview](docs/PROJECT_OVERVIEW.md) — Read when designing features: brand-agnostic white-label, BYOK, and self-hosting rules.
+- [Project Overview](docs/PROJECT_OVERVIEW.md) — Multi-app scope, package naming (`realm_*` vs `<app>_*`), white-label, BYOK, and self-hosting rules.
 - [Architecture Decisions](docs/ARCHITECTURE.md) — Read §1 before scaffolding packages/apps or picking a library; then only the section for your task.
+- [Tavern Architecture](docs/apps/TAVERN.md) — Read when working on Tavern (pub/restaurant management suite).
+- [Grimoire Architecture](docs/apps/GRIMOIRE.md) — Read when working on Grimoire (E2EE interactive notes, local-first RAG, A2UI, and sandboxed scripts).
 - [Config, Branding & BYOK Secrets](docs/CONFIG_AND_SECRETS.md) — Read when touching endpoints (`ClientEndpointConfig`), `/api/v1/bootstrap`, or backend secrets.
 - [Monorepo & Linting](docs/MONOREPO.md) — Read when adding packages/dependencies or configuring `realm_lints`.
 - [Testing & Debugging](docs/TESTING_AND_DEBUGGING.md) — Read Sec 1–2 for unit/widget tests & Previews; Sec 3–5 only when live-debugging via DTD/VM Service or scaffolding `apps/*`.

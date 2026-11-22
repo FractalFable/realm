@@ -1,20 +1,24 @@
 # Realm
 
-An open-source, white-label pub and restaurant management platform built with **Dart** and **Flutter**.
+An open-source, self-hosted **Dart** and **Flutter** multi-app ecosystem and shared platform.
 
-Operators deploy Realm on their own infrastructure and customize branding, third-party integrations, and hosting with zero hardcoded venue logic or vendor lock-in.
+Realm provides shared UI building blocks, strict linting, runtime configuration, BYOK secret management, A2UI rendering, client-side E2EE primitives, and a modular backend (`realm_server`) shared across multiple applications:
+
+- **Tavern** ([docs/apps/TAVERN.md](docs/apps/TAVERN.md)) — Standalone, white-label pub and restaurant management suite with A2UI staff copilot and guest discovery.
+- **Grimoire** ([docs/apps/GRIMOIRE.md](docs/apps/GRIMOIRE.md)) — Multi-platform (iOS, Android, macOS, Web), end-to-end encrypted interactive note-taking app with bi-directional links, web embeds, sandboxed scripts, local-first RAG, and A2UI.
+- Future Realm applications built on the same shared foundation.
 
 ## Setting Up With an AI Agent
 
 Most operators will hand this repository to an AI coding agent rather than configuring files by hand. Follow this runbook when setting up an instance:
 
 1. **Verify workspace status first**:
-   - Currently implemented: `packages/realm_core`, `packages/realm_ui`, `packages/realm_lints`, and `./scripts/check.sh`.
-   - Planned (not yet scaffolded): `apps/` deployables (backend server, admin, customer apps) and container compose files.
+   - Implemented: `packages/realm_core`, `packages/realm_ui`, `packages/realm_lints`, and `./scripts/check.sh`.
+   - Planned / scaffolding in progress: `packages/tavern_core`, `packages/grimoire_core`, `packages/realm_a2ui`, `packages/realm_crypto`, and `apps/` (`realm_server`, `tavern_staff`, `tavern_guest`, `grimoire`).
    - Read [`AGENTS.md`](AGENTS.md) and [`docs/CONFIG_AND_SECRETS.md`](docs/CONFIG_AND_SECRETS.md) before configuring anything.
 2. **Collect operator inputs** (ask once in one message):
-   - Hosting target & backend domain (HTTPS required outside local loopback `localhost` / `127.0.0.1` / `::1`).
-   - Venue branding (`name`, `primaryColorArgb`, optional `tagline`, optional `https://` `logoUrl`).
+   - Enabled server modules (`tavern`, `grimoire`) and backend domain (HTTPS required outside local loopback `localhost` / `127.0.0.1` / `::1`).
+   - Runtime branding (`name`, `primaryColorArgb`, optional `tagline`, optional `https://` `logoUrl`).
    - Optional BYOK integrations to enable (`aiLlm`, `payments`, `posFiscal`, `email`, `sms`—skip any unconfigured ones; Realm boots cleanly without them).
 3. **Configure secrets & endpoints safely**:
    - Generate infrastructure secrets (`DATABASE_URL`, `JWT_SIGNING_KEY`, `REALM_MASTER_KEY`) directly on the server/secret store without printing raw values into chat.
@@ -27,25 +31,26 @@ Most operators will hand this repository to an AI coding agent rather than confi
 
 ## Core Principles
 
-- **Bring Your Own Branding (White-Label)** — Venue name, colors, logo, tagline, and domain are supplied at runtime via `GET /api/v1/bootstrap` (`VenueBootstrap`), never hardcoded into builds.
+- **Bring Your Own Branding (White-Label)** — Instance name, colors, logo, tagline, and domain are supplied at runtime via `GET /api/v1/bootstrap`, never hardcoded into builds.
 - **Bring Your Own API Keys (BYOK)** — Optional AI, payment, POS/fiscal, email, and SMS integrations use the operator's own backend credentials stored envelope-encrypted at rest (never shipped in client binaries).
-- **Self-Hosted (Bring Your Own Hosting)** — Run the backend and database on any VPS, container host, or on-premise server.
+- **Self-Hosted (Bring Your Own Hosting)** — Run the modular backend and database on any VPS, container host, or on-premise server.
 
 ## Repository Layout
 
-This repository uses **Dart Pub Workspaces** (`sdk: ^3.14.0`, Flutter `>=3.50.0`):
+This repository uses **Dart Pub Workspaces** (`sdk: ^3.14.0`, Flutter `>=3.50.0`) with scope-based naming:
 
-- `packages/realm_core/` — Pure Dart domain models, validation, and bootstrap/config contracts (`ClientEndpointConfig`, `VenueBootstrap`, `VenueBranding`, `VenueCapabilities`, `IntegrationKeyStatus`).
-- `packages/realm_ui/` — Shared Flutter UI primitives and `VenueBranding` Material theming.
-- `packages/realm_lints/` — Shared strict Dart & Flutter analyzer/linter presets.
-- `apps/` — Deployable backend, staff/admin, customer apps, and supporting tools *(planned)*.
-- `scripts/check.sh` — Deterministic pre-review gate (`dart format`, `dart analyze`, and workspace tests).
-- `docs/` — Architecture, configuration, workflow, and agent runbooks.
+- `packages/realm_*` — App-agnostic shared platform libraries (`realm_core`, `realm_ui`, `realm_lints`, and planned `realm_a2ui`, `realm_crypto`, `realm_protocol`, `realm_client`, `realm_vault`).
+- `packages/<app>_*` — Product-specific shared Dart/Flutter libraries (`tavern_core`, `grimoire_core`, `feature_*`).
+- `apps/` — Deployable applications (`realm_server`, `tavern_staff`, `tavern_guest`, `grimoire`).
+- `scripts/check.sh` — Deterministic pre-review gate (`dart format`, `dart analyze`, hygiene checks, and workspace tests).
+- `docs/` — Architecture, configuration, workflow, app specs, and agent runbooks.
 
 ## Documentation
 
-- [Project Overview](docs/PROJECT_OVERVIEW.md) — Open-source goals and strict brand-agnostic rules.
+- [Project Overview](docs/PROJECT_OVERVIEW.md) — Multi-app platform goals and strict brand-agnostic rules.
 - [Architecture Decisions](docs/ARCHITECTURE.md) — Backend, database, state, routing, package boundaries, testing, and open operator decisions.
+- [Tavern Architecture](docs/apps/TAVERN.md) — White-label pub/restaurant management apps and A2UI workflows.
+- [Grimoire Architecture](docs/apps/GRIMOIRE.md) — E2EE interactive notes, local-first RAG, A2UI, and sandboxed scripting.
 - [Config, Branding & BYOK Secrets](docs/CONFIG_AND_SECRETS.md) — Endpoint resolution, `/api/v1/bootstrap`, and server-only BYOK secret storage.
 - [Monorepo & Linting](docs/MONOREPO.md) — Dart Pub Workspace setup and shared `realm_lints` rules.
 - [A2UI Architecture Note](docs/A2UI.md) — Declarative generative UI (`a2ui_flutter` / `a2ui_core`) evaluation.
