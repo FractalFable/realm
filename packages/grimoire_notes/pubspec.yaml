@@ -1,0 +1,26 @@
+name: grimoire_notes
+description: Interactive Grimoire note workspace Cubit and UI feature package.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.14.0
+  flutter: ">=3.50.0"
+
+resolution: workspace
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_bloc: ^9.1.1
+  grimoire_core: ^0.1.0
+  material_ui: ^1.8.0
+  meta: ^1.17.0
+  realm_a2ui: ^0.1.0
+  realm_core: ^0.1.0
+  realm_ui: ^0.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  realm_lints: ^0.1.0
