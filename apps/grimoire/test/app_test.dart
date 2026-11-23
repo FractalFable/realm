@@ -47,37 +47,77 @@ void main() {
     expect(darkScheme.primary, isNot(equals(lightScheme.primary)));
   });
 
-  testWidgets('supports compact/expanded viewports, note switching, and a11y', (
-    tester,
-  ) async {
-    final semantics = tester.ensureSemantics();
-    try {
-      await tester.binding.setSurfaceSize(const Size(390, 844));
-      await tester.pumpWidget(const GrimoireApp(themeMode: .light));
-      await tester.pumpAndSettle();
+  testWidgets(
+    'supports compact/expanded viewports, note switching, scripts, lock, and a11y',
+    (tester) async {
+      final semantics = tester.ensureSemantics();
+      try {
+        await tester.binding.setSurfaceSize(const Size(390, 844));
+        await tester.pumpWidget(
+          GrimoireApp(
+            bootstrap: AppBootstrap(
+              branding: AppBranding(
+                name: 'Example Grimoire',
+                primaryColorArgb: 0xFF283593,
+              ),
+              capabilities: AppCapabilities(
+                aiAssistantEnabled: true,
+                enabledModules: const {'grimoire'},
+              ),
+            ),
+            themeMode: .light,
+          ),
+        );
+        await tester.pumpAndSettle();
 
-      expect(find.text('Backlinks: 1'), findsOneWidget);
-      await expectLater(tester, meetsGuideline(textContrastGuideline));
-      await expectLater(tester, meetsGuideline(androidTapTargetGuideline));
-      await expectLater(tester, meetsGuideline(iOSTapTargetGuideline));
-      await expectLater(tester, meetsGuideline(labeledTapTargetGuideline));
+        expect(find.text('Backlinks: 1'), findsOneWidget);
+        await expectLater(tester, meetsGuideline(textContrastGuideline));
+        await expectLater(tester, meetsGuideline(androidTapTargetGuideline));
+        await expectLater(tester, meetsGuideline(iOSTapTargetGuideline));
+        await expectLater(tester, meetsGuideline(labeledTapTargetGuideline));
 
-      await tester.binding.setSurfaceSize(const Size(1280, 800));
-      await tester.pumpAndSettle();
+        await tester.binding.setSurfaceSize(const Size(1280, 800));
+        await tester.pumpAndSettle();
 
-      await tester.tap(
-        find.byKey(const ValueKey('grimoire_note_script-playground')),
-      );
-      await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('grimoire_script_run_b4')));
+        await tester.pumpAndSettle();
+        expect(
+          find.byKey(const ValueKey('realm_a2ui_surface_script_b4')),
+          findsOneWidget,
+        );
 
-      expect(
-        find.byKey(const ValueKey('grimoire_active_note_title')),
-        findsOneWidget,
-      );
-      expect(find.text('Backlinks: 1'), findsOneWidget);
-    } finally {
-      await tester.binding.setSurfaceSize(null);
-      semantics.dispose();
-    }
-  });
+        await tester.tap(
+          find.byKey(const ValueKey('grimoire_note_script-playground')),
+        );
+        await tester.pumpAndSettle();
+
+        expect(
+          find.byKey(const ValueKey('grimoire_active_note_title')),
+          findsOneWidget,
+        );
+        expect(find.text('Backlinks: 1'), findsOneWidget);
+
+        await tester.tap(find.byKey(const ValueKey('grimoire_lock_button')));
+        await tester.pumpAndSettle();
+        expect(
+          find.byKey(const ValueKey('grimoire_locked_card')),
+          findsOneWidget,
+        );
+
+        await tester.enterText(
+          find.byKey(const ValueKey('grimoire_unlock_passphrase')),
+          'grimoire-passphrase',
+        );
+        await tester.tap(find.byKey(const ValueKey('grimoire_unlock_button')));
+        await tester.pumpAndSettle();
+        expect(
+          find.byKey(const ValueKey('grimoire_active_note_title')),
+          findsOneWidget,
+        );
+      } finally {
+        await tester.binding.setSurfaceSize(null);
+        semantics.dispose();
+      }
+    },
+  );
 }
