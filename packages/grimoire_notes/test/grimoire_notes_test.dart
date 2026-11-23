@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:grimoire_core/grimoire_core.dart';
@@ -179,6 +181,61 @@ void main() {
       await cubit.unlockVault(passphrase: 'correct-horse-battery');
       expect(cubit.state, isA<GrimoireWorkspaceReady>());
     });
+
+    test(
+      'aborts in-flight load on lock and preserves mid-save tier/search',
+      () async {
+        final listGate = Completer<void>();
+        final saveGate = Completer<void>();
+        final store = _GatedVaultStore(
+          InMemoryVaultStore(
+            initialNotes: buildSampleNotes(),
+            now: () => sampleTime.add(const Duration(minutes: 5)),
+          ),
+          listGate: listGate,
+          saveGate: saveGate,
+        );
+        final cubit = GrimoireWorkspaceCubit(
+          vaultStore: store,
+          scriptRuntime: SandboxedScriptRuntime(
+            a2uiCatalogId: RealmA2uiHost.basicCatalogId,
+          ),
+          now: () => sampleTime.add(const Duration(minutes: 5)),
+        );
+        addTearDown(cubit.close);
+
+        final loadFuture = cubit.load();
+        cubit.lockVault();
+        listGate.complete();
+        await loadFuture;
+        expect(cubit.state, const GrimoireWorkspaceLocked(noteCount: 0));
+
+        store.listGate = null;
+        await cubit.unlockVault(passphrase: 'unlock-now');
+        expect(cubit.state, isA<GrimoireWorkspaceReady>());
+
+        final updateFuture = cubit.updateBlock(
+          RichTextBlock(
+            id: 'b1-check',
+            text: 'Audit AAD cipher bindings',
+            style: .checklist,
+            checked: true,
+          ),
+        );
+        cubit
+          ..updateSearchQuery('script')
+          ..setAiTrustTier(AiTrustTier.optInByokCloud);
+        saveGate.complete();
+        await updateFuture;
+
+        final afterSave = cubit.state as GrimoireWorkspaceReady;
+        expect(afterSave.searchQuery, 'script');
+        expect(afterSave.aiTrustTier, AiTrustTier.optInByokCloud);
+        expect(afterSave.searchHits.map((h) => h.note.id), [
+          'script-playground',
+        ]);
+      },
+    );
   });
 
   group('GrimoireWorkspaceScreen widget & a11y', () {
@@ -392,4 +449,37 @@ void main() {
       },
     );
   });
+}
+
+final class _GatedVaultStore implements LocalVaultStore {
+  _GatedVaultStore(this._inner, {this.listGate, this.saveGate});
+
+  final LocalVaultStore _inner;
+  Completer<void>? listGate;
+  Completer<void>? saveGate;
+
+  @override
+  Future<List<NoteDocument>> listNotes() async {
+    if (listGate case final gate?) {
+      await gate.future;
+    }
+    return await _inner.listNotes();
+  }
+
+  @override
+  Future<NoteDocument?> getNote(String noteId) => _inner.getNote(noteId);
+
+  @override
+  Future<NoteDocument> saveNote(
+    NoteDocument note, {
+    int? expectedRevision,
+  }) async {
+    if (saveGate case final gate?) {
+      await gate.future;
+    }
+    return await _inner.saveNote(note, expectedRevision: expectedRevision);
+  }
+
+  @override
+  Future<bool> deleteNote(String noteId) => _inner.deleteNote(noteId);
 }

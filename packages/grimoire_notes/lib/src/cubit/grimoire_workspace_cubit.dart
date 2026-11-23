@@ -220,9 +220,11 @@ class GrimoireWorkspaceCubit extends Cubit<GrimoireWorkspaceState> {
   final DateTime Function() _now;
 
   int _lastKnownNoteCount = 0;
+  int _sessionEpoch = 0;
 
   /// Loads all notes from the vault and emits [GrimoireWorkspaceReady].
   Future<void> load({String? selectNoteId}) async {
+    final epoch = ++_sessionEpoch;
     final previous = state;
     final query = previous is GrimoireWorkspaceReady
         ? previous.searchQuery
@@ -234,7 +236,7 @@ class GrimoireWorkspaceCubit extends Cubit<GrimoireWorkspaceState> {
     emit(const GrimoireWorkspaceLoading());
     try {
       final notes = await _vaultStore.listNotes();
-      if (isClosed) {
+      if (isClosed || epoch != _sessionEpoch) {
         return;
       }
       _lastKnownNoteCount = notes.length;
@@ -256,7 +258,7 @@ class GrimoireWorkspaceCubit extends Cubit<GrimoireWorkspaceState> {
         ),
       );
     } on Exception catch (error) {
-      if (!isClosed) {
+      if (!isClosed && epoch == _sessionEpoch) {
         emit(GrimoireWorkspaceFailure(message: error.toString()));
       }
     }
@@ -306,17 +308,19 @@ class GrimoireWorkspaceCubit extends Cubit<GrimoireWorkspaceState> {
       blocks: [RichTextBlock(id: 'b1', text: 'New encrypted note.')],
     );
 
+    final epoch = _sessionEpoch;
     try {
       final saved = await _vaultStore.saveNote(newNote);
-      await _reloadReady(
-        selectNoteId: saved.id,
-        query: current.searchQuery,
-        trustTier: current.aiTrustTier,
-        scriptResults: current.scriptResults,
-      );
+      if (isClosed || epoch != _sessionEpoch) {
+        return;
+      }
+      await _reloadReady(selectNoteId: saved.id, epoch: epoch);
     } on Exception catch (error) {
-      if (!isClosed) {
-        emit(current.copyWith(statusMessage: error.toString()));
+      final latest = state;
+      if (!isClosed &&
+          epoch == _sessionEpoch &&
+          latest is GrimoireWorkspaceReady) {
+        emit(latest.copyWith(statusMessage: error.toString()));
       }
     }
   }
@@ -332,7 +336,6 @@ class GrimoireWorkspaceCubit extends Cubit<GrimoireWorkspaceState> {
       return;
     }
     await _saveUpdatedNote(
-      current,
       active.copyWith(excludeFromCloudAi: !active.excludeFromCloudAi),
     );
   }
@@ -347,10 +350,7 @@ class GrimoireWorkspaceCubit extends Cubit<GrimoireWorkspaceState> {
     if (active == null) {
       return;
     }
-    await _saveUpdatedNote(
-      current,
-      active.copyWith(blocks: [...active.blocks, block]),
-    );
+    await _saveUpdatedNote(active.copyWith(blocks: [...active.blocks, block]));
   }
 
   /// Replaces the matching block in the active note using [updatedBlock].
@@ -367,7 +367,7 @@ class GrimoireWorkspaceCubit extends Cubit<GrimoireWorkspaceState> {
       for (final block in active.blocks)
         if (block.id == updatedBlock.id) updatedBlock else block,
     ];
-    await _saveUpdatedNote(current, active.copyWith(blocks: updatedBlocks));
+    await _saveUpdatedNote(active.copyWith(blocks: updatedBlocks));
   }
 
   /// Removes the block identified by [blockId] from the active note.
@@ -384,13 +384,9 @@ class GrimoireWorkspaceCubit extends Cubit<GrimoireWorkspaceState> {
       for (final block in active.blocks)
         if (block.id != blockId) block,
     ];
-    final nextResults = Map<String, ScriptExecutionResult>.from(
-      current.scriptResults,
-    )..remove(blockId);
     await _saveUpdatedNote(
-      current,
       active.copyWith(blocks: remaining),
-      scriptResults: nextResults,
+      removedScriptBlockId: blockId,
     );
   }
 
@@ -458,6 +454,7 @@ class GrimoireWorkspaceCubit extends Cubit<GrimoireWorkspaceState> {
       return;
     }
 
+    final epoch = _sessionEpoch;
     final result = await _scriptRuntime.execute(
       target,
       ScriptExecutionContext(
@@ -466,7 +463,7 @@ class GrimoireWorkspaceCubit extends Cubit<GrimoireWorkspaceState> {
         approvedPermissions: approvedPermissions,
       ),
     );
-    if (isClosed) {
+    if (isClosed || epoch != _sessionEpoch) {
       return;
     }
     final latest = state;
@@ -481,6 +478,7 @@ class GrimoireWorkspaceCubit extends Cubit<GrimoireWorkspaceState> {
 
   /// Locks the active workspace session.
   void lockVault() {
+    _sessionEpoch++;
     final current = state;
     if (current is GrimoireWorkspaceReady) {
       _lastKnownNoteCount = current.notes.length;
@@ -509,47 +507,59 @@ class GrimoireWorkspaceCubit extends Cubit<GrimoireWorkspaceState> {
   }
 
   Future<void> _saveUpdatedNote(
-    GrimoireWorkspaceReady current,
     NoteDocument updated, {
-    Map<String, ScriptExecutionResult>? scriptResults,
+    String? removedScriptBlockId,
   }) async {
+    final epoch = _sessionEpoch;
     try {
       final saved = await _vaultStore.saveNote(
         updated,
         expectedRevision: updated.revision,
       );
+      if (isClosed || epoch != _sessionEpoch) {
+        return;
+      }
       await _reloadReady(
         selectNoteId: saved.id,
-        query: current.searchQuery,
-        trustTier: current.aiTrustTier,
-        scriptResults: scriptResults ?? current.scriptResults,
+        epoch: epoch,
+        removedScriptBlockId: removedScriptBlockId,
       );
     } on VaultRevisionConflictException catch (conflict) {
-      if (!isClosed) {
-        emit(
-          current.copyWith(
-            statusMessage:
-                'Revision conflict on "${conflict.noteId}" '
-                '(expected ${conflict.expectedRevision}, '
-                'found ${conflict.actualRevision}).',
-          ),
+      final latest = state;
+      if (!isClosed &&
+          epoch == _sessionEpoch &&
+          latest is GrimoireWorkspaceReady) {
+        await _reloadReady(
+          selectNoteId: latest.selectedNoteId,
+          epoch: epoch,
+          statusMessage:
+              'Revision conflict on "${conflict.noteId}" '
+              '(expected ${conflict.expectedRevision}, '
+              'found ${conflict.actualRevision}).',
         );
       }
     } on Exception catch (error) {
-      if (!isClosed) {
-        emit(current.copyWith(statusMessage: error.toString()));
+      final latest = state;
+      if (!isClosed &&
+          epoch == _sessionEpoch &&
+          latest is GrimoireWorkspaceReady) {
+        emit(latest.copyWith(statusMessage: error.toString()));
       }
     }
   }
 
   Future<void> _reloadReady({
     required String selectNoteId,
-    required String query,
-    required AiTrustTier trustTier,
-    required Map<String, ScriptExecutionResult> scriptResults,
+    required int epoch,
+    String? removedScriptBlockId,
+    String? statusMessage,
   }) async {
     final notes = await _vaultStore.listNotes();
-    if (isClosed) {
+    if (isClosed || epoch != _sessionEpoch) {
+      return;
+    }
+    final latest = state;
+    if (latest is! GrimoireWorkspaceReady) {
       return;
     }
     _lastKnownNoteCount = notes.length;
@@ -557,18 +567,23 @@ class GrimoireWorkspaceCubit extends Cubit<GrimoireWorkspaceState> {
     final graph = NoteGraph(notes);
     final hits = _searchIndex.search(
       notes: notes,
-      query: query,
-      trustTier: trustTier,
+      query: latest.searchQuery,
+      trustTier: latest.aiTrustTier,
     );
+    final nextResults = removedScriptBlockId == null
+        ? latest.scriptResults
+        : (Map<String, ScriptExecutionResult>.from(latest.scriptResults)
+            ..remove(removedScriptBlockId));
     emit(
       GrimoireWorkspaceReady(
         notes: notes,
         graph: graph,
         selectedNoteId: selectedId,
-        searchQuery: query,
+        searchQuery: latest.searchQuery,
         searchHits: hits,
-        aiTrustTier: trustTier,
-        scriptResults: scriptResults,
+        aiTrustTier: latest.aiTrustTier,
+        scriptResults: nextResults,
+        statusMessage: statusMessage,
       ),
     );
   }

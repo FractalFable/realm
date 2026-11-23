@@ -87,6 +87,7 @@ class _GrimoireWorkspaceScreenState extends State<GrimoireWorkspaceScreen> {
                     icon: const Icon(Icons.lock_outline),
                     onPressed: () {
                       _passphraseController.clear();
+                      _searchController.clear();
                       cubit.lockVault();
                     },
                   ),
